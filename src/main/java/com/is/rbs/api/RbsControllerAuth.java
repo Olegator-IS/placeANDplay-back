@@ -54,6 +54,7 @@ public class RbsControllerAuth {
                                        @RequestBody LoginRequest loginRequest) {
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
+        System.out.println("test");
         return userService.loginRequest(clientIp,url,method,requestId,currentTime,executionTime,loginRequest);
     }
 
