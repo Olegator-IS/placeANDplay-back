@@ -51,11 +51,12 @@ public class RbsControllerAuth {
                                        @RequestAttribute("method") String method,
                                        @RequestAttribute("Request-Id") String requestId,
                                        @RequestAttribute("startTime") long startTime,
+                                       @RequestHeader(value = "isUser", required = false, defaultValue = "true") Boolean isUser,
                                        @RequestBody LoginRequest loginRequest) {
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
         System.out.println("test");
-        return userService.loginRequest(clientIp,url,method,requestId,currentTime,executionTime,loginRequest);
+        return userService.loginRequest(clientIp,url,method,requestId,currentTime,executionTime,loginRequest,isUser);
     }
 
     @GetMapping("/getUserInfo")
