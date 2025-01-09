@@ -71,8 +71,8 @@ public class UserService {
                     new UsernamePasswordAuthenticationToken(email, password)
             );
             SecurityContextHolder.getContext().setAuthentication(authentication);
-            String jwtToken = jwtAuthenticationFilter.generateToken(email);
-            String jwtRefreshToken = jwtAuthenticationFilter.generateRefreshToken(email);
+            String jwtToken = jwtAuthenticationFilter.generateToken(email,authentication);
+            String jwtRefreshToken = jwtAuthenticationFilter.generateRefreshToken(email,authentication);
 
             if (jwtToken.equals("Error")) {
                 log.error("Ошибка генерации токена для email: {}", email);
@@ -104,12 +104,17 @@ public class UserService {
             Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
 
             if (claims.getSubject() != null) {
-                User user = userRepository.getUserInfoByEmail((claims.getSubject()));
+
+                User user = !claims.getSubject().equals("GUEST")?
+                        userRepository.getUserInfoByEmail((claims.getSubject())):null;
                 Map<String, Object> additionalInfo = new HashMap<>();
-                additionalInfo.put("userId", user.getUserId());
-                additionalInfo.put("firstName", user.getFirstName());
-                additionalInfo.put("lastName", user.getLastName());
-                additionalInfo.put("email", user.getEmail());
+
+                additionalInfo.put("userId", user!=null?user.getUserId():0);
+                additionalInfo.put("firstName", user!=null?user.getFirstName():"GUEST");
+                additionalInfo.put("lastName", user!=null?user.getLastName():"GUEST");
+                additionalInfo.put("email", user!=null?user.getEmail():"GUEST");
+                additionalInfo.put("role", user!=null?"USER":"GUEST");
+                additionalInfo.put("isEmailVerified", user != null && user.isEmailVerified());
                 return ResponseEntity.status(HttpStatus.OK)
                         .body(new Response(200, "OK", additionalInfo));
             } else {
@@ -139,7 +144,11 @@ public class UserService {
             String decryptedToken = TokenSecurity.decryptToken(refreshToken, secretKey);
             Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
             User user = userRepository.getUserInfoByEmail((claims.getSubject()));
-            String jwtToken = jwtAuthenticationFilter.generateToken(user.getEmail());
+
+            Authentication authentication = customAuthenticationProvider.authenticate(
+                    new UsernamePasswordAuthenticationToken(user.getEmail(), user.getPasswordHash())
+            );
+            String jwtToken = jwtAuthenticationFilter.generateToken(user.getEmail(), authentication);
 
             Map<String, Object> tokenInfo = new HashMap<>();
             tokenInfo.put("accessToken", TokenSecurity.encryptToken(jwtToken, secretKey));
@@ -191,8 +200,10 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Response> loginRequest(String clientIp,String url,String method,String requestId,long currentTime,long executionTime,LoginRequest loginRequest) {
-        if (!userRepository.existsByEmail(loginRequest.getEmail())) {
+    public ResponseEntity<Response> loginRequest(String clientIp,String url,String method,String requestId,
+                                                 long currentTime,long executionTime,LoginRequest loginRequest,
+                                                 boolean isUser) {
+        if (!userRepository.existsByEmail(loginRequest.getEmail())&&isUser) {
             Response response = new Response("EMAIL_IS_NOT_FOUND", "Required email is not found",
                     HttpStatus.UNAUTHORIZED.value());
             logger.logRequestDetails(HttpStatus.UNAUTHORIZED,currentTime,method,url,requestId,clientIp,executionTime,loginRequest,response);
@@ -200,7 +211,11 @@ public class UserService {
         }
 
         try {
-            String storedHashedPassword = userRepository.getUserInfoByEmail(loginRequest.getEmail()).getPasswordHash();
+            loginRequest.setPassword(isUser ? loginRequest.getPassword() : "GUEST");
+            loginRequest.setEmail(isUser ? loginRequest.getEmail() : "GUEST");
+            String storedHashedPassword = isUser
+                    ? userRepository.getUserInfoByEmail(loginRequest.getEmail()).getPasswordHash()
+                    : passwordEncoder.encode("GUEST");
             if (passwordEncoder.matches(loginRequest.getPassword(), storedHashedPassword)) {
                 Response responseToken = getToken(loginRequest.getEmail(), loginRequest.getPassword()).getBody();
                 assert responseToken != null;

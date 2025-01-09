@@ -6,6 +6,7 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -52,13 +53,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .getBody();
     }
 
-    public static String generateToken(String username) {
+    public static String generateToken(String username, Authentication authentication) {
         Date now = new Date();
         Date expirationDate = new Date(now.getTime() + 3600000); // Токен на 1 час
 //        System.out.println("Sau brat");
         try{
         return Jwts.builder()
                 .setSubject(username)
+                .claim("role", authentication.getAuthorities().toString())
                 .setIssuedAt(now)
                 .setExpiration(expirationDate)
                 .signWith(SECRET_KEY)
@@ -70,11 +72,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
          }
 
-    public static String generateRefreshToken(String username) {
+    public static String generateRefreshToken(String username,Authentication authentication) {
         Date now = new Date();
         Date expirationDate = new Date(now.getTime() + 604800000); // Токен на 7 дней
         return Jwts.builder()
                 .setSubject(username)
+                .claim("role", authentication.getAuthorities().toString())
                 .setIssuedAt(now)
                 .setExpiration(expirationDate)
                 .signWith(SECRET_KEY)

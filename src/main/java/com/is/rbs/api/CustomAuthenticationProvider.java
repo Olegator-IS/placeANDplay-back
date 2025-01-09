@@ -34,8 +34,13 @@ public class CustomAuthenticationProvider implements AuthenticationProvider {
         String username = authentication.getName();
         String password = authentication.getCredentials().toString();
 
-        // Создаем аутентификацию пользователя
-        return new UsernamePasswordAuthenticationToken(username, password, Collections.singletonList(new SimpleGrantedAuthority("USER")));
+        if(authentication.getName().equals("GUEST")) {
+            return new UsernamePasswordAuthenticationToken(username, password, Collections.singletonList(new SimpleGrantedAuthority("GUEST")));
+        }else{
+            // Создаем аутентификацию пользователя
+            return new UsernamePasswordAuthenticationToken(username, password, Collections.singletonList(new SimpleGrantedAuthority("USER")));
+        }
+
     }
 
     @Override
