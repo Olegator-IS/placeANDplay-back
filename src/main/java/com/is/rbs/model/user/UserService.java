@@ -5,6 +5,10 @@ import com.is.rbs.config.JwtAuthenticationFilter;
 import com.is.rbs.config.TokenSecurity;
 import com.is.rbs.model.ResponseAnswers.Response;
 import com.is.rbs.model.logger.Logger;
+import com.is.rbs.model.sports.SkillsDTO;
+import com.is.rbs.model.sports.SportsDTO;
+import com.is.rbs.repository.ListOfSkillsRepository;
+import com.is.rbs.repository.ListOfSportsRepository;
 import com.is.rbs.repository.UserAdditionalInfoRepository;
 import com.is.rbs.repository.UserRepository;
 import io.jsonwebtoken.Claims;
@@ -34,6 +38,9 @@ public class UserService {
     private Logger logger;
 
     @Autowired
+    private ListOfSportsRepository listOfSportsRepository;
+
+    @Autowired
     private UserRepository userRepository;
 
     @Autowired
@@ -47,6 +54,9 @@ public class UserService {
 
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ListOfSkillsRepository listOfSkillsRepository;
 
     public UserService(SecretKey secretKey, JwtAuthenticationFilter jwtAuthenticationFilter,Logger logger) {
         this.secretKey = secretKey;
@@ -295,4 +305,45 @@ public class UserService {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
+
+    public List<SportsDTO> getSportsByLanguage(String language) {
+        String columnName;
+        switch (language) {
+            case "ru":
+                columnName = "name_ru";
+                break;
+            case "en":
+                columnName = "name_en";
+                break;
+            case "uz":
+                columnName = "name_uz";
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported language: " + language);
+        }
+
+        return listOfSportsRepository.findByLanguage(columnName);
+    }
+
+    public List<SkillsDTO> getListOfSkills(String language) {
+        String columnName;
+        switch (language) {
+            case "ru":
+                columnName = "name_ru";
+                break;
+            case "en":
+                columnName = "name_en";
+                break;
+            case "uz":
+                columnName = "name_uz";
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported language: " + language);
+        }
+
+        return listOfSkillsRepository.findByLanguage(columnName);
+    }
 }
+
+
+
