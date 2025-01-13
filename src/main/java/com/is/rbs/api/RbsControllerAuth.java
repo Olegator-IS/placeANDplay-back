@@ -2,6 +2,7 @@ package com.is.rbs.api;
 
 import com.is.rbs.model.ResponseAnswers.ResponseToken;
 import com.is.rbs.model.user.LoginRequest;
+import com.is.rbs.model.user.RegistrationAddInfoRequest;
 import com.is.rbs.model.user.RegistrationRequest;
 import com.is.rbs.model.user.UserService;
 import com.is.rbs.repository.UserRepository;
@@ -67,6 +68,18 @@ public class RbsControllerAuth {
     @GetMapping("/getUserInfoRefreshToken")
     public ResponseEntity<?> getUserInfoRefreshToken(@RequestHeader String refreshToken) {
         return userService.refreshToken(refreshToken);
+    }
+
+    @PatchMapping("/registrationAddInfo")
+    public ResponseEntity<?> registrationAddInfo(  @RequestAttribute("clientIp") String clientIp,
+                                                   @RequestAttribute("url") String url,
+                                                   @RequestAttribute("method") String method,
+                                                   @RequestAttribute("Request-Id") String requestId,
+                                                   @RequestAttribute("startTime") long startTime,
+                                                   @RequestBody RegistrationAddInfoRequest registrationAddInfoRequest) {
+        long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
+        long executionTime = currentTime - startTime; // Время выполнения запроса
+        return userService.registrationAddInfo(clientIp,url,method,requestId,currentTime,executionTime,registrationAddInfoRequest);
     }
 
     @GetMapping("/testSystem")

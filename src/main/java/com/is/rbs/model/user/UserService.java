@@ -5,12 +5,12 @@ import com.is.rbs.config.JwtAuthenticationFilter;
 import com.is.rbs.config.TokenSecurity;
 import com.is.rbs.model.ResponseAnswers.Response;
 import com.is.rbs.model.logger.Logger;
+import com.is.rbs.repository.UserAdditionalInfoRepository;
 import com.is.rbs.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +22,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -36,6 +35,9 @@ public class UserService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private UserAdditionalInfoRepository userAdditionalInfoRepository;
 
     @Autowired
     private CustomAuthenticationProvider customAuthenticationProvider;
@@ -62,6 +64,25 @@ public class UserService {
         user.setEmailVerified(false);
         user.setRegistrationDate(LocalDateTime.now());
         return userRepository.save(user);
+    }
+
+    public UserAdditionalInfo  registerUser(long userId, String hobbies, List<FavoriteSport> favoriteSportList,
+                                           int currentLocationCityId, int currentLocationCountryId, String bio, String profilePictureUrl) {
+
+
+
+
+        UserAdditionalInfo userAddInfo = new UserAdditionalInfo();
+        userAddInfo.setUserId(userId);
+        userAddInfo.setHobbies(hobbies);
+        userAddInfo.setFavoriteSports(FavoriteSport.toJson(favoriteSportList));
+        userAddInfo.setCurrentLocationCityId(currentLocationCityId);
+        userAddInfo.setCurrentLocationCountryId(currentLocationCountryId);
+        userAddInfo.setBio(bio);
+        userAddInfo.setProfilePictureUrl(profilePictureUrl);
+        System.out.println(userAddInfo.getFavoriteSports());
+
+        return userAdditionalInfoRepository.save(userAddInfo);
     }
 
     public ResponseEntity<Response> getToken(String email, String password) {
@@ -107,14 +128,11 @@ public class UserService {
 
                 User user = !claims.getSubject().equals("GUEST")?
                         userRepository.getUserInfoByEmail((claims.getSubject())):null;
-                Map<String, Object> additionalInfo = new HashMap<>();
 
-                additionalInfo.put("userId", user!=null?user.getUserId():0);
-                additionalInfo.put("firstName", user!=null?user.getFirstName():"GUEST");
-                additionalInfo.put("lastName", user!=null?user.getLastName():"GUEST");
-                additionalInfo.put("email", user!=null?user.getEmail():"GUEST");
-                additionalInfo.put("role", user!=null?"USER":"GUEST");
-                additionalInfo.put("isEmailVerified", user != null && user.isEmailVerified());
+                Optional<UserAdditionalInfo> userAddInfo = user != null ?
+                        userAdditionalInfoRepository.findById(user.getUserId()) :
+                        null;
+                Map<String, Object> additionalInfo = getStringObjectMap(user, userAddInfo);
                 return ResponseEntity.status(HttpStatus.OK)
                         .body(new Response(200, "OK", additionalInfo));
             } else {
@@ -136,6 +154,24 @@ public class UserService {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new Response(500, "TOKEN_ERROR", "Непредвиденная ошибка"));
         }
+    }
+
+    private static Map<String, Object> getStringObjectMap(User user, Optional<UserAdditionalInfo> userAddInfo) {
+        Map<String, Object> additionalInfo = new HashMap<>();
+
+        additionalInfo.put("userId", user !=null? user.getUserId():0);
+        additionalInfo.put("firstName", user !=null? user.getFirstName():"GUEST");
+        additionalInfo.put("lastName", user !=null? user.getLastName():"GUEST");
+        additionalInfo.put("email", user !=null? user.getEmail():"GUEST");
+        additionalInfo.put("role", user !=null?"USER":"GUEST");
+        additionalInfo.put("isEmailVerified", user != null && user.isEmailVerified());
+        additionalInfo.put("hobbies", user != null ? userAddInfo.map(info -> info.getHobbies()).orElse("No hobbies")
+                : "No hobbies");
+        additionalInfo.put("bio", user != null ? userAddInfo.map(info -> info.getBio()).orElse("No bio")
+                : "No bio");
+        additionalInfo.put("favoriteSports", user != null ? userAddInfo.map(info -> info.getFavoriteSportObjects())
+                : "[]");
+        return additionalInfo;
     }
 
     public ResponseEntity<Response> refreshToken(String refreshToken) {
@@ -196,6 +232,28 @@ public class UserService {
             Response response = new Response(HttpStatus.BAD_REQUEST.value(), "SOMETHING_WRONG",
                     "Error during processing, try again");
             logger.logRequestDetails(HttpStatus.BAD_REQUEST,currentTime,method,url,requestId,clientIp,executionTime,registrationRequest,e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    public ResponseEntity<Response> registrationAddInfo(String clientIp,String url,String method,String requestId,
+                                                        long currentTime,long executionTime,
+                                                        RegistrationAddInfoRequest registrationAddInfoRequest) {
+        try {
+
+            UserAdditionalInfo user = registerUser(registrationAddInfoRequest.getUserId(),
+                    registrationAddInfoRequest.getHobbies(),registrationAddInfoRequest.getFavoriteSports(),
+                    registrationAddInfoRequest.getCurrentLocationCityId(),registrationAddInfoRequest.getCurrentLocationCountryId(),
+                    registrationAddInfoRequest.getBio(),registrationAddInfoRequest.getProfilePictureUrl());
+
+            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
+            logger.logRequestDetails(HttpStatus.CREATED,currentTime,method,url,requestId,clientIp,executionTime,registrationAddInfoRequest,response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        } catch (Exception e) {
+            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "SOMETHING_WRONG",
+                    "Error during processing, try again");
+            logger.logRequestDetails(HttpStatus.BAD_REQUEST,currentTime,method,url,requestId,clientIp,executionTime,registrationAddInfoRequest,e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
