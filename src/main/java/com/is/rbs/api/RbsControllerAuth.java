@@ -1,11 +1,13 @@
 package com.is.rbs.api;
 
 import com.is.rbs.model.ResponseAnswers.ResponseToken;
+import com.is.rbs.model.sports.SkillsDTO;
+import com.is.rbs.model.sports.Sports;
+import com.is.rbs.model.sports.SportsDTO;
 import com.is.rbs.model.user.LoginRequest;
 import com.is.rbs.model.user.RegistrationAddInfoRequest;
 import com.is.rbs.model.user.RegistrationRequest;
 import com.is.rbs.model.user.UserService;
-import com.is.rbs.repository.UserRepository;
 import io.swagger.annotations.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.slf4j.Logger;
@@ -14,7 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.is.rbs.model.ResponseAnswers.Response;
+
+import java.util.List;
 
 
 @Api(tags = "Available APIs for the IDP", description = "List of methods for interacting with IDP")
@@ -80,6 +83,40 @@ public class RbsControllerAuth {
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
         return userService.registrationAddInfo(clientIp,url,method,requestId,currentTime,executionTime,registrationAddInfoRequest);
+    }
+
+    @GetMapping("/getListOfSports")
+    public List<SportsDTO> getListOfSports(
+            @RequestAttribute("clientIp") String clientIp,
+            @RequestAttribute("url") String url,
+            @RequestAttribute("method") String method,
+            @RequestAttribute("Request-Id") String requestId,
+            @RequestAttribute("startTime") long startTime,
+//            @RequestHeader String accessToken,
+//            @RequestHeader String refreshToken,
+            @RequestHeader(value = "language", required = true, defaultValue = "en") String language    ) {
+        long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
+        long executionTime = currentTime - startTime; // Request execution time
+
+
+        return userService.getSportsByLanguage(language);
+    }
+
+    @GetMapping("/getListOfSkills")
+    public List<SkillsDTO> getListOfSkills(
+            @RequestAttribute("clientIp") String clientIp,
+            @RequestAttribute("url") String url,
+            @RequestAttribute("method") String method,
+            @RequestAttribute("Request-Id") String requestId,
+            @RequestAttribute("startTime") long startTime,
+//            @RequestHeader String accessToken,
+//            @RequestHeader String refreshToken,
+            @RequestHeader(value = "language", required = true, defaultValue = "en") String language    ) {
+        long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
+        long executionTime = currentTime - startTime; // Request execution time
+
+
+        return userService.getListOfSkills(language);
     }
 
     @GetMapping("/testSystem")
