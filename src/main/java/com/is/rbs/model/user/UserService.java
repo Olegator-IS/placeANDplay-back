@@ -4,13 +4,12 @@ import com.is.rbs.api.CustomAuthenticationProvider;
 import com.is.rbs.config.JwtAuthenticationFilter;
 import com.is.rbs.config.TokenSecurity;
 import com.is.rbs.model.ResponseAnswers.Response;
+import com.is.rbs.model.locations.CitiesDTO;
+import com.is.rbs.model.locations.CountriesDTO;
 import com.is.rbs.model.logger.Logger;
 import com.is.rbs.model.sports.SkillsDTO;
 import com.is.rbs.model.sports.SportsDTO;
-import com.is.rbs.repository.ListOfSkillsRepository;
-import com.is.rbs.repository.ListOfSportsRepository;
-import com.is.rbs.repository.UserAdditionalInfoRepository;
-import com.is.rbs.repository.UserRepository;
+import com.is.rbs.repository.*;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -57,6 +56,12 @@ public class UserService {
 
     @Autowired
     private ListOfSkillsRepository listOfSkillsRepository;
+
+    @Autowired
+    private ListOfCitiesRepository listOfCitiesRepository;
+
+    @Autowired
+    private ListOfCountriesRepository listOfCountriesRepository;
 
     public UserService(SecretKey secretKey, JwtAuthenticationFilter jwtAuthenticationFilter,Logger logger) {
         this.secretKey = secretKey;
@@ -175,6 +180,8 @@ public class UserService {
         additionalInfo.put("email", user !=null? user.getEmail():"GUEST");
         additionalInfo.put("role", user !=null?"USER":"GUEST");
         additionalInfo.put("isEmailVerified", user != null && user.isEmailVerified());
+        additionalInfo.put("city", user != null ? userAddInfo.map(info -> info.getCurrentLocationCityId()).orElse(0)
+                : 0);
         additionalInfo.put("hobbies", user != null ? userAddInfo.map(info -> info.getHobbies()).orElse("No hobbies")
                 : "No hobbies");
         additionalInfo.put("bio", user != null ? userAddInfo.map(info -> info.getBio()).orElse("No bio")
@@ -342,6 +349,44 @@ public class UserService {
         }
 
         return listOfSkillsRepository.findByLanguage(columnName);
+    }
+
+    public List<CitiesDTO> getListOfCities(String language,Integer countryCode) {
+        String columnName;
+        switch (language) {
+            case "ru":
+                columnName = "name_ru";
+                break;
+            case "en":
+                columnName = "name_en";
+                break;
+            case "uz":
+                columnName = "name_uz";
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported language: " + language);
+        }
+
+        return listOfCitiesRepository.findByLanguage(columnName,countryCode);
+    }
+
+    public List<CountriesDTO> getListOfCountries(String language) {
+        String columnName;
+        switch (language) {
+            case "ru":
+                columnName = "name_ru";
+                break;
+            case "en":
+                columnName = "name_en";
+                break;
+            case "uz":
+                columnName = "name_uz";
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported language: " + language);
+        }
+
+        return listOfCountriesRepository.findByLanguage(columnName);
     }
 }
 

@@ -1,6 +1,9 @@
 package com.is.rbs.api;
 
 import com.is.rbs.model.ResponseAnswers.ResponseToken;
+import com.is.rbs.model.locations.Cities;
+import com.is.rbs.model.locations.CitiesDTO;
+import com.is.rbs.model.locations.CountriesDTO;
 import com.is.rbs.model.sports.SkillsDTO;
 import com.is.rbs.model.sports.Sports;
 import com.is.rbs.model.sports.SportsDTO;
@@ -117,6 +120,37 @@ public class RbsControllerAuth {
 
 
         return userService.getListOfSkills(language);
+    }
+
+    @GetMapping("/getListOfCities")
+    public List<CitiesDTO> getListOfCities(
+            @RequestAttribute("clientIp") String clientIp,
+            @RequestAttribute("url") String url,
+            @RequestAttribute("method") String method,
+            @RequestAttribute("Request-Id") String requestId,
+            @RequestAttribute("startTime") long startTime,
+            @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
+            @RequestHeader(value = "countryCode", required = true) Integer countryCode) {
+        long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
+        long executionTime = currentTime - startTime; // Request execution time
+
+
+        return userService.getListOfCities(language,countryCode);
+    }
+
+    @GetMapping("/getListOfCounries")
+    public List<CountriesDTO> getListOfCountries(
+            @RequestAttribute("clientIp") String clientIp,
+            @RequestAttribute("url") String url,
+            @RequestAttribute("method") String method,
+            @RequestAttribute("Request-Id") String requestId,
+            @RequestAttribute("startTime") long startTime,
+            @RequestHeader(value = "language", required = true, defaultValue = "en") String language) {
+        long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
+        long executionTime = currentTime - startTime; // Request execution time
+
+
+        return userService.getListOfCountries(language);
     }
 
     @GetMapping("/testSystem")
