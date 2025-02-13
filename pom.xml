@@ -16,7 +16,7 @@
 	<description>remote banking system service</description>
 	<properties>
 		<java.version>1.8</java.version>
-		<start-class>com.is.rbs.RbsApplication</start-class>
+		<start-class>com.is.RbsApplication</start-class>
 	</properties>
 	<dependencies>
 		<dependency>
