@@ -22,8 +22,17 @@ public class PlaceController {
     }
 
     @GetMapping("/allByCity")
-    public ResponseEntity<List<Place>> getAllPlaces(@RequestParam int currentCity) {
-        List<Place> places = placeService.getAllPlaces(currentCity);
+    public ResponseEntity<List<Place>> getAllPlaces(
+            @RequestParam int currentCity,
+            @RequestParam(required = false) List<Integer> sportId) {
+
+        List<Place> places;
+        if (sportId == null || sportId.isEmpty()) {
+            places = placeService.getAllPlaces(currentCity);
+        } else {
+            places = placeService.getAllPlacesBySport(currentCity, sportId);
+        }
+
         return places.isEmpty() ? ResponseEntity.noContent().build() : ResponseEntity.ok(places);
     }
 
@@ -44,4 +53,6 @@ public class PlaceController {
         Place places = placeService.getPlace(placeId);
         return places==null ? ResponseEntity.noContent().build() : ResponseEntity.ok(places);
     }
+
+
 }
