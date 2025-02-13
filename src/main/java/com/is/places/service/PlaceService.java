@@ -19,6 +19,10 @@ public class PlaceService {
         return placeRepository.findAllPlacesByCurrentLocationCityId(city);
     }
 
+    public List<Place> getAllPlacesBySport(int currentCity, List<Integer> sportIds) {
+        return placeRepository.findByCityAndSportIdIn(currentCity, sportIds);
+    }
+
     public Place addPlace(Place place) {
         return placeRepository.save(place);
     }
