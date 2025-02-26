@@ -42,9 +42,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .authorizeRequests()
                 .antMatchers("/api/auth/**","/api/private/v1/**", "/v2/api-docs", "/configuration/ui",
                         "/swagger-resources/**", "/configuration/security", "/swagger-ui.html", "/webjars/**",
-                        "/swagger-ui/**").permitAll()
-                .antMatchers("/api/private/places/**","/api/private/events/**").authenticated() // Для этих маршрутов нужен токен
-                .anyRequest().authenticated()
+                        "/swagger-ui/**","/api/private/places/**").permitAll()
+                .antMatchers("/api/private/events/**").authenticated() // Для этих маршрутов нужен токен
+//                .anyRequest().authenticated()
                 .and()
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
     }

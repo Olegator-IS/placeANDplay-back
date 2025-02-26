@@ -2,6 +2,7 @@ package com.is.auth.config;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -15,6 +16,7 @@ import java.security.Key;
 import java.util.Date;
 import java.util.UUID;
 
+@Slf4j
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -25,6 +27,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        log.info("Headers {} ",request.getHeader("accessToken"));
+
+        log.info("Headers {} ",request.getHeader("refreshToken"));
         long startTime = System.currentTimeMillis();
         request.setAttribute("clientIp", request.getRemoteAddr());
         request.setAttribute("url", request.getRequestURI());
@@ -50,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     public static String generateToken(String username, Authentication authentication) {
         Date now = new Date();
-        Date expirationDate = new Date(now.getTime() + 3600000); // Токен на 1 час
+        Date expirationDate = new Date(now.getTime() + 120000); // Токен на 1 час
 //        System.out.println("Sau brat");
         try{
         return Jwts.builder()
