@@ -9,6 +9,7 @@ import com.is.auth.model.user.LoginRequest;
 import com.is.auth.model.user.RegistrationAddInfoRequest;
 import com.is.auth.model.user.RegistrationRequest;
 import com.is.auth.model.user.UserService;
+import com.is.auth.service.EmailService;
 import io.swagger.annotations.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.mail.MessagingException;
 import java.util.List;
 
 
@@ -31,12 +33,14 @@ public class RbsControllerAuth {
 
     private static final Logger log = LoggerFactory.getLogger(RbsControllerAuth.class);
     private final UserService userService;
+    private final EmailService emailService;
 
 
     @Autowired
-    public RbsControllerAuth(UserService userService) {
+    public RbsControllerAuth(UserService userService,EmailService emailService) {
         log.info("RbsControllerAuth initialized!");
         this.userService = userService;
+        this.emailService = emailService;
     }
 
     @PostMapping("/registration")
@@ -81,6 +85,7 @@ public class RbsControllerAuth {
                                                    @RequestAttribute("method") String method,
                                                    @RequestAttribute("Request-Id") String requestId,
                                                    @RequestAttribute("startTime") long startTime,
+                                                   @RequestHeader String accessToken,@RequestHeader String refreshToken,
                                                    @RequestBody RegistrationAddInfoRequest registrationAddInfoRequest) {
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
@@ -129,7 +134,8 @@ public class RbsControllerAuth {
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
             @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
-            @RequestHeader(value = "countryCode", required = true) Integer countryCode) {
+            @RequestHeader(value = "countryCode", required = true) Integer countryCode,
+            @RequestHeader String accessToken,@RequestHeader String refreshToken) {
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -144,7 +150,8 @@ public class RbsControllerAuth {
             @RequestAttribute("method") String method,
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
-            @RequestHeader(value = "language", required = true, defaultValue = "en") String language) {
+            @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
+            @RequestHeader String accessToken,@RequestHeader String refreshToken) {
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -152,6 +159,20 @@ public class RbsControllerAuth {
         return userService.getListOfCountries(language);
     }
 
+    @GetMapping("/emailVerification")
+    public ResponseEntity<?> sendCodeToMail(@RequestParam String email,
+                                            @RequestHeader(value = "language", required = true, defaultValue = "ru") String language,
+                                            @RequestHeader String accessToken,@RequestHeader String refreshToken) throws MessagingException {
+        return emailService.sendVerificationEmail(email,language);
+    }
+
+    @GetMapping("/verifyCode")
+    public ResponseEntity<?> verifyCode(@RequestParam String email,
+                                        @RequestParam int code,
+                                        @RequestHeader(value = "language", required = true, defaultValue = "ru") String language,
+                                        @RequestHeader String accessToken,@RequestHeader String refreshToken) throws MessagingException {
+        return emailService.verifyCode(email,code,language);
+    }
     @GetMapping("/testSystem")
     public ResponseEntity<ResponseToken> getUserInfo(){
         return new ResponseEntity<>(HttpStatus.OK);

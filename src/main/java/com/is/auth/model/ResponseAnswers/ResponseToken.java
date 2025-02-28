@@ -18,12 +18,12 @@ public class ResponseToken {
     private Object message;
     @ApiModelProperty(value = "Result", example = "OK")
     private Object result;
-    @ApiModelProperty(value = "AdditionalInfo", example = "{" +
-            "    \"user_id\": '1'," +
-            "    \"first_name\": \"'Oleg'\"," +
-            "    \"last_name\": \"'Abramov'\"" +
-            "    \"email\": \"'abramov.o.o.1998@gmail.com'\"" +
-            "  }")
+//    @ApiModelProperty(value = "AdditionalInfo", example = "{" +
+//            "    \"user_id\": '1'," +
+//            "    \"first_name\": \"'Oleg'\"," +
+//            "    \"last_name\": \"'Abramov'\"" +
+//            "    \"email\": \"'abramov.o.o.1998@gmail.com'\"" +
+//            "  }")
     private Object additionalInfo;
 
 
