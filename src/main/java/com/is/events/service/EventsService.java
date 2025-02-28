@@ -32,39 +32,36 @@ public class EventsService {
     }
 
     public Event addEvent(Event event,String accessToken,String refreshToken,String clientIp,String url,String method,
-                          String requestId,long executionTime,long currentTime) {
+                          String requestId,long executionTime,long currentTime,String lang) {
         if (event.getDateTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Дата события не может быть в прошлом");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"date_past_error"));
         }
 //        logger.logRequestDetails(HttpStatus.OK,currentTime,method,url,requestId,clientIp,executionTime,loginRequest,response);
         return eventsRepository.save(event);
     }
 
-    public Event joinEvent(Long eventId,Long userId,String userName){
+    public Event joinEvent(Long eventId,Long userId,String userName,String lang){
         Event event = eventsRepository.findEventByEventId(eventId);
         if(event == null){
-            throw new IllegalArgumentException("Event not found");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_not_found"));
         }
         List<CurrentParticipants> participants = event.getCurrentParticipants();
 
         boolean isAlreadyJoined = participants.stream().anyMatch(p -> p.getParticipantId().equals(userId));
         if(isAlreadyJoined){
-            throw new IllegalArgumentException("User already joined");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"user_already_joined"));
         }
 
         if(!event.getStatus().equalsIgnoreCase("OPEN")){
-            throw new IllegalArgumentException("This event is not available to join,please wait for new event");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_is_not_available"));
         }
 
         if (event.getDateTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("This event was expired");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_expired"));
         }
 
         participants.add(new CurrentParticipants(userId,userName));
-
         event.setCurrentParticipants(participants);
-
-        log.info("User has joined the event -> name {}, userId {}",userName,userId);
         return eventsRepository.save(event);
     }
 
@@ -73,13 +70,13 @@ public class EventsService {
     }
 
 
-    public Event eventAction(Long eventId,Long userId,String action){
+    public Event eventAction(Long eventId,Long userId,String action,String lang){
         Event event = eventsRepository.findEventByEventId(eventId);
         if(event == null){
-            throw new IllegalArgumentException("Event not found");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_not_found"));
         }
         if(!Objects.equals(event.getOrganizerEvent().getOrganizerId(), userId)){
-            throw new IllegalArgumentException("You are not allowed to perform this action");
+            throw new IllegalArgumentException(returnTextToUserByLang(lang,"not_allowed")); // Смена состояния,если не организатор ивента
         }
 
         List<String> actions = new ArrayList<>();
@@ -91,17 +88,20 @@ public class EventsService {
 
 
             if(!actions.contains(action)){
-                throw new IllegalArgumentException("This action is not available");
+                throw new IllegalArgumentException(returnTextToUserByLang(lang,"action_not_available"));
             }
 
 
         switch(event.getStatus().toUpperCase()){
             case "CANCELLED":
-                throw new IllegalArgumentException("Event was already cancelled");
+//                throw new IllegalArgumentException("Event was already cancelled");
+                throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_cancelled"));
             case "COMPLETED":
-                throw new IllegalArgumentException("Event was already completed");
+//                throw new IllegalArgumentException("Event was already completed");
+                throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_completed"));
             case "EXPIRED":
-                throw new IllegalArgumentException("Event was already expired");
+//                throw new IllegalArgumentException("Event was already expired");
+                throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_expired"));
         }
                 /*
         Разрешенные ивенты
@@ -126,6 +126,48 @@ public class EventsService {
                 eventsRepository.save(event);
             }
         }
+    }
+
+    private String returnTextToUserByLang(String lang, String action) {
+        return switch (lang + "_" + action) {
+            case "ru_event_not_found" -> "Событие не найдено в системе! Попробуйте еще раз!";
+            case "uz_event_not_found" -> "Tizimda hodisa topilmadi. Qayta urinib ko'ring!";
+            case "en_event_not_found" -> "Event not found in the system! Try again!";
+
+            case "ru_user_already_joined" -> "Вы уже участник данного события, повторное присоединение невозможно!";
+            case "uz_user_already_joined" -> "Siz allaqachon ishtirokchisiz; qayta qo'shilish mumkin emas!";
+            case "en_user_already_joined" -> "You are already a participant in this event; re-joining is not possible!";
+
+            case "ru_event_is_not_available" -> "Это мероприятие недоступно для участия, пожалуйста, выберите другое мероприятие!";
+            case "uz_event_is_not_available" -> "Ushbu tadbir ishtirok etish uchun mavjud emas, iltimos, boshqa tadbirni tanlang!";
+            case "en_event_is_not_available" -> "This event is not available to join, please wait for a new event.";
+
+            case "ru_event_already_expired" -> "Событие было просрочено по времени.";
+            case "uz_event_already_expired" -> "Tadbir muddati o'tib ketgan edi.";
+            case "en_event_already_expired" -> "The event was overdue.";
+
+            case "ru_event_already_cancelled" -> "Событие уже отменено!";
+            case "uz_event_already_cancelled" -> "Hodisa allaqachon bekor qilingan!";
+            case "en_event_already_cancelled" -> "Event already cancelled!";
+
+            case "ru_event_already_completed" -> "Событие уже завершено!";
+            case "uz_event_already_completed" -> "Hodisa allaqachon tugallangan!";
+            case "en_event_already_completed" -> "Event already completed!";
+
+            case "ru_date_past_error" -> "Дата события не может быть в прошлом";
+            case "uz_date_past_error" -> "Tadbir sanasi o'tmishda bo'lishi mumkin emas";
+            case "en_date_past_error" -> "The date of the event cannot be in the past";
+
+            case "ru_not_allowed" -> "Вы не имеете права выполнять это действие!";
+            case "uz_not_allowed" -> "Siz ushbu harakatni bajarishga ruxsatingiz yo'q!";
+            case "en_not_allowed" -> "You are not allowed to perform this action.";
+
+            case "ru_action_not_available" -> "Действие недоступно!";
+            case "uz_action_not_available" -> "Harakat mavjud emas!";
+            case "en_action_not_available" -> "This action is not available!";
+
+            default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
+        };
     }
 
 }

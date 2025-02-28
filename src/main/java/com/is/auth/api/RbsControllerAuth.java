@@ -85,6 +85,7 @@ public class RbsControllerAuth {
                                                    @RequestAttribute("method") String method,
                                                    @RequestAttribute("Request-Id") String requestId,
                                                    @RequestAttribute("startTime") long startTime,
+                                                   @RequestHeader String accessToken,@RequestHeader String refreshToken,
                                                    @RequestBody RegistrationAddInfoRequest registrationAddInfoRequest) {
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
@@ -133,7 +134,8 @@ public class RbsControllerAuth {
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
             @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
-            @RequestHeader(value = "countryCode", required = true) Integer countryCode) {
+            @RequestHeader(value = "countryCode", required = true) Integer countryCode,
+            @RequestHeader String accessToken,@RequestHeader String refreshToken) {
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -148,7 +150,8 @@ public class RbsControllerAuth {
             @RequestAttribute("method") String method,
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
-            @RequestHeader(value = "language", required = true, defaultValue = "en") String language) {
+            @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
+            @RequestHeader String accessToken,@RequestHeader String refreshToken) {
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -158,14 +161,16 @@ public class RbsControllerAuth {
 
     @GetMapping("/emailVerification")
     public ResponseEntity<?> sendCodeToMail(@RequestParam String email,
-                                            @RequestHeader(value = "language", required = true, defaultValue = "ru") String language) throws MessagingException {
+                                            @RequestHeader(value = "language", required = true, defaultValue = "ru") String language,
+                                            @RequestHeader String accessToken,@RequestHeader String refreshToken) throws MessagingException {
         return emailService.sendVerificationEmail(email,language);
     }
 
     @GetMapping("/verifyCode")
     public ResponseEntity<?> verifyCode(@RequestParam String email,
                                         @RequestParam int code,
-                                        @RequestHeader(value = "language", required = true, defaultValue = "ru") String language) throws MessagingException {
+                                        @RequestHeader(value = "language", required = true, defaultValue = "ru") String language,
+                                        @RequestHeader String accessToken,@RequestHeader String refreshToken) throws MessagingException {
         return emailService.verifyCode(email,code,language);
     }
     @GetMapping("/testSystem")

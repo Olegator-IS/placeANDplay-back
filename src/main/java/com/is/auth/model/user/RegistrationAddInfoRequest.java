@@ -18,7 +18,7 @@ public class RegistrationAddInfoRequest {
     @ApiModelProperty(value = "Хобби пользователя", example = "Reading, Swimming")
     private String hobbies;
 
-    @ApiModelProperty(value = "Избранные виды спорта пользователя", example = "[{\"sportId\": 1, \"skillId\": 5, \"readyToTeach\": true}, ...]")
+   // @ApiModelProperty(value = "Избранные виды спорта пользователя", example = "[{\"sportId\": 1, \"skillId\": 5, \"readyToTeach\": true}, ...]")
     private List<FavoriteSport> favoriteSports;
 
     @ApiModelProperty(value = "Идентификатор города текущего местоположения", example = "1")

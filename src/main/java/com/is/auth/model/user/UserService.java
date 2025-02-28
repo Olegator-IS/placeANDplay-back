@@ -314,20 +314,12 @@ public class UserService {
     }
 
     public List<SportsDTO> getSportsByLanguage(String language) {
-        String columnName;
-        switch (language) {
-            case "ru":
-                columnName = "name_ru";
-                break;
-            case "en":
-                columnName = "name_en";
-                break;
-            case "uz":
-                columnName = "name_uz";
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported language: " + language);
-        }
+        String columnName = switch (language) {
+            case "ru" -> "name_ru";
+            case "en" -> "name_en";
+            case "uz" -> "name_uz";
+            default -> throw new IllegalArgumentException("Unsupported language: " + language);
+        };
 
         return listOfSportsRepository.findByLanguage(columnName);
     }
