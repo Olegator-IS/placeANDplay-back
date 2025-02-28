@@ -31,7 +31,7 @@ public class EmailService {
     public ResponseEntity<?> sendVerificationEmail(String email, String lang) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
             LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
 
             long requestCount = verificationCodeRepository.countRecentRequests(email, tenMinutesAgo);
@@ -70,12 +70,14 @@ public class EmailService {
             int code = generateCode();
             EmailVerificationCode verificationCode = new EmailVerificationCode(email, code, 10); // действует 10 минут
             verificationCodeRepository.save(verificationCode);
-            helper.setFrom("noreply@placeplay.com", "Place&Play Support");
+            helper.setFrom("verify@placeandplay.uz");
             helper.setTo(email);
-            helper.setText(getContent(code, lang), true); // HTML-текст
             helper.setSubject(textSubject.get(subjectPrefix + "_title"));
+            helper.setText(getContent(code,lang), true);
             mailSender.send(message);
             return ResponseEntity.ok().build();
+
+
         } catch (MessagingException e) {
             log.error("Ошибка при отправке письма на email: {}", email, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -85,6 +87,8 @@ public class EmailService {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Произошла непредвиденная ошибка.");
         }
+
+
     }
 
 
