@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "user_details")
+@Table(name = "user_details", schema = "users")
 @TypeDef(name = "jsonb", typeClass = JsonBinaryType.class)
 
 @Getter

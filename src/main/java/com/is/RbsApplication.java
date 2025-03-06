@@ -1,5 +1,6 @@
 package com.is;
 
+import com.is.auth.config.SSHTunnel;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -11,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class RbsApplication extends SpringBootServletInitializer{
 
 	public static void main(String[] args) {
+        SSHTunnel.createSSHTunnel(); // Устанавливаем SSH туннель
 		SpringApplication.run(RbsApplication.class, args);
 	}
 	
