@@ -9,7 +9,7 @@ import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "email_verification_codes")
+@Table(name = "email_verification_codes", schema = "users")
 @Getter
 @Setter
 @NoArgsConstructor
