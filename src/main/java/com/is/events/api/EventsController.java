@@ -1,127 +1,119 @@
 package com.is.events.api;
 
+import com.is.events.dto.EventDTO;
 import com.is.events.model.Event;
-import com.is.events.model.EventResponse;
 import com.is.events.service.EventsService;
-import io.swagger.annotations.Api;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
-@Api(tags = "Available APIs for the EVENTS", description = "List of methods for interacting with EVENTS")
+import com.is.events.dto.JoinEventRequest;
 
 @RestController
-@RequestMapping("/api/private/events")
+@RequestMapping("/api/v1/events")
+@RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Events API", description = "API для работы с событиями")
 public class EventsController {
+
     private final EventsService eventsService;
 
-    @Autowired
-    public EventsController(EventsService eventsService) {
-        this.eventsService = eventsService;
-    }
-    @GetMapping("/getAllEvents")
-    public ResponseEntity<List<Event>> getAllEventsByCity(@RequestParam long currentCity,
-                                                          @RequestHeader String accessToken,
-                                                          @RequestHeader String refreshToken) {
-        List<Event> events = eventsService.getAllEvents(currentCity);
-        return events.isEmpty() ? ResponseEntity.noContent().build() : ResponseEntity.ok(events);
+    @Operation(summary = "Создать новое событие")
+    @PostMapping
+    public ResponseEntity<EventDTO> createEvent(
+            @RequestBody @Valid Event event,
+            @RequestHeader(defaultValue = "ru") String language) {
+        return ResponseEntity.ok(eventsService.addEvent(event, language));
     }
 
-    @GetMapping("/getEvents")
-    public ResponseEntity<List<Event>> getEventsByPlaceId(@RequestParam long placeId,
-                                                          @RequestHeader String accessToken,
-                                                          @RequestHeader String refreshToken) {
-        List<Event> events = eventsService.getAllEventsByCity(placeId);
-        return events.isEmpty() ? ResponseEntity.noContent().build() : ResponseEntity.ok(events);
+    @Operation(summary = "Получить все события с пагинацией")
+    @GetMapping
+    public ResponseEntity<Page<EventDTO>> getAllEvents(
+            @RequestParam Long placeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "dateTime") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection,
+            @RequestHeader(defaultValue = "ru") String language) {
+        Sort.Direction direction = Sort.Direction.fromString(sortDirection);
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        return ResponseEntity.ok(eventsService.getAllEvents(placeId, pageRequest));
     }
 
-    @GetMapping("/getEvent")
-    public ResponseEntity<EventResponse> getEventByEventId(@RequestParam long eventId,
-                                                           @RequestParam long userId,
-                                                           @RequestHeader String accessToken,
-                                                           @RequestHeader String refreshToken) {
-        Event events = eventsService.getEventById(eventId);
-        boolean letTheUserJoin = false;
-        // Проверяем наличие нашего юзера в списках участников
-        boolean isJoined = events.getCurrentParticipants().stream()
-                .anyMatch(p -> p.getParticipantId().equals(userId));
+    @Operation(summary = "Получить события по городу")
+    @GetMapping("/city")
+    public ResponseEntity<Page<EventDTO>> getAllEventsByCity(
+            @RequestParam Long placeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader(defaultValue = "ru") String language) {
+        PageRequest pageRequest = PageRequest.of(page, size);
+        return ResponseEntity.ok(eventsService.getAllEventsByCity(placeId, pageRequest));
+    }
 
-        // Проверяем доступен ли ивент
-        boolean isAvailableToJoin = events.getStatus().equals("OPEN");
-        // Проверяем на expired
-        boolean isExpired = events.getDateTime().isBefore(LocalDateTime.now());
+    @Operation(summary = "Получить событие по ID")
+    @GetMapping("/{eventId}")
+    public ResponseEntity<EventDTO> getEventById(
+            @PathVariable Long eventId,
+            @RequestHeader(defaultValue = "ru") String language) {
+        return ResponseEntity.ok(eventsService.getEventById(eventId, language));
+    }
 
+    @Operation(summary = "Присоединиться к событию")
+    @PostMapping(value = "/{eventId}/join", consumes = "application/json")
+    public ResponseEntity<EventDTO> joinEvent(
+            @PathVariable Long eventId,
+            @RequestBody @Valid JoinEventRequest request,
+            @RequestHeader(defaultValue = "ru") String language) {
+        log.info("Joining event {} with request: {}", eventId, request);
+        return ResponseEntity.ok(eventsService.joinEvent(eventId, request.getParticipantId(), request.getParticipantName(), language));
+    }
 
-        
-        if(!isJoined && isAvailableToJoin && !isExpired) {
-            letTheUserJoin =true;
+    @Operation(summary = "Изменить статус события")
+    @PutMapping("/{eventId}/status")
+    public ResponseEntity<Event> eventAction(
+            @PathVariable Long eventId,
+            @RequestParam Long userId,
+            @RequestParam String action,
+            @RequestHeader(defaultValue = "ru") String language) {
+        return ResponseEntity.ok(eventsService.eventAction(eventId, userId, action, language));
+    }
+
+    @GetMapping("/today")
+    @Operation(summary = "Получить события на сегодня")
+    public ResponseEntity<List<EventDTO>> getEventsForToday(
+            @RequestHeader(defaultValue = "ru") String language) {
+        List<Event> events = eventsService.getEventsForToday(java.time.LocalDate.now());
+        if (events.isEmpty()) {
+            log.info("No events found for today");
+            return ResponseEntity.ok(List.of());
         }
-
-        EventResponse eventResponse = new EventResponse(events,letTheUserJoin);
-
-        return ResponseEntity.ok(eventResponse);
+        
+        List<EventDTO> eventDTOs = events.stream()
+                .map(eventsService::convertToDTO)
+                .collect(Collectors.toList());
+        log.info("Found {} events for today", eventDTOs.size());
+        return ResponseEntity.ok(eventDTOs);
     }
 
-    @PostMapping("/addEvent")
-    public ResponseEntity<Event> addEvent(@RequestBody Event event,
-                                          @RequestHeader("accessToken") String accessToken,
-                                          @RequestHeader("refreshToken") String refreshToken,
-                                          @RequestHeader("language") String language,
-                                          @RequestAttribute("clientIp") String clientIp,
-                                          @RequestAttribute("url") String url,
-                                          @RequestAttribute("method") String method,
-                                          @RequestAttribute("Request-Id") String requestId,
-                                          @RequestAttribute("startTime") long startTime) {
-        long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
-        long executionTime = currentTime - startTime; // Время выполнения запроса
-        Event createdEvent = eventsService.addEvent(event,accessToken,refreshToken,clientIp,url,method,requestId,
-                executionTime,currentTime,language);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdEvent);
-    }
-
-    @GetMapping("/join")
-    public ResponseEntity<Event> joinEvent(@RequestParam Long eventId,
-                                           @RequestParam Long userId,
-                                           @RequestParam String userName,
-                                           @RequestHeader String accessToken,
-                                           @RequestHeader String refreshToken,
-                                           @RequestHeader String language) {
-        Event createdEvent = eventsService.joinEvent(eventId,userId,userName,language);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdEvent);
-    }
-
-    @GetMapping("/action")
-    public ResponseEntity<Event> action(@RequestParam Long eventId,
-                                        @RequestParam Long userId,
-                                        @RequestParam String action,
-                                        @RequestHeader String accessToken,
-                                        @RequestHeader String refreshToken,
-                                        @RequestHeader String language){
-        /*
-        Разрешенные ивенты
-        OPEN - Ивент открыт для регистрации участников
-        CANCELLED - Организатор отменил ивент.
-        ONGOING - Ивент начался
-        COMPLETED - Ивен завершён
-         */
-        Event eventAction = eventsService.eventAction(eventId,userId,action,language);
-        return ResponseEntity.status(HttpStatus.OK).body(eventAction);
-    }
-
-    @Scheduled(fixedRate = 60000) // Каждую минуту
-    public void updateExpiredEvents() {
-        LocalDate today = LocalDate.now();
-
-        eventsService.getEventsForToday(today);
-
-
+    @Operation(summary = "Выйти из события")
+    @PostMapping("/{eventId}/leave")
+    public ResponseEntity<EventDTO> leaveEvent(
+            @PathVariable Long eventId,
+            @RequestParam Long participantId,
+            @RequestHeader(defaultValue = "ru") String language) {
+        log.info("Participant {} leaving event {}", participantId, eventId);
+        return ResponseEntity.ok(eventsService.leaveEvent(eventId, participantId, language));
     }
 }

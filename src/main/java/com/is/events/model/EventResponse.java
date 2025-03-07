@@ -3,6 +3,7 @@ package com.is.events.model;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @Getter
@@ -27,7 +28,7 @@ public class EventResponse {
         this.placeId = event.getPlaceId();
         this.sportEvent = event.getSportEvent();
         this.organizerEvent = event.getOrganizerEvent();
-        this.currentParticipants = event.getCurrentParticipants();
+        this.currentParticipants = Collections.singletonList(event.getCurrentParticipants());
         this.status = event.getStatus();
         this.description = event.getDescription();
         this.skillLevel = event.getSkillLevel();

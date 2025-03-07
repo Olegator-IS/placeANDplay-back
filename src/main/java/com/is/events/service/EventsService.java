@@ -1,17 +1,27 @@
 package com.is.events.service;
 
+import com.is.events.dto.EventDTO;
+import com.is.events.dto.OrganizerDTO;
+import com.is.events.dto.ParticipantDTO;
+import com.is.events.exception.EventNotFoundException;
+import com.is.events.exception.EventValidationException;
 import com.is.events.model.CurrentParticipants;
 import com.is.events.model.Event;
+import com.is.events.model.enums.EventStatus;
 import com.is.events.repository.EventsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
@@ -19,112 +29,263 @@ import java.util.Objects;
 public class EventsService {
 
     private final EventsRepository eventsRepository;
+    private final LocalizationService localizationService;
 
 //    @Autowired
 //    private Logger logger;
 
-    public List<Event> getAllEvents(long placeId) {
-        return eventsRepository.findAll();
+    @Cacheable(value = "events", key = "#placeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
+    public Page<EventDTO> getAllEvents(long placeId, Pageable pageable) {
+        log.info("Fetching events for placeId: {} with pagination: {}", placeId, pageable);
+        return eventsRepository.findAllByPlaceId(placeId, pageable)
+                .map(this::convertToDTO);
     }
 
-    public List<Event> getAllEventsByCity(long placeId) {
-        return eventsRepository.findAllByPlaceId(placeId);
+    @Cacheable(value = "eventsByCity", key = "#placeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
+    public Page<EventDTO> getAllEventsByCity(long placeId, Pageable pageable) {
+        log.info("Fetching events by city for placeId: {} with pagination: {}", placeId, pageable);
+        return eventsRepository.findAllByPlaceId(placeId, pageable)
+                .map(this::convertToDTO);
     }
 
-    public Event addEvent(Event event,String accessToken,String refreshToken,String clientIp,String url,String method,
-                          String requestId,long executionTime,long currentTime,String lang) {
-        if (event.getDateTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"date_past_error"));
+    public EventDTO convertToDTO(Event event) {
+        EventDTO dto = new EventDTO();
+        dto.setEventId(event.getEventId());
+        dto.setTitle(event.getSportEvent().getSportName());
+        dto.setDescription(event.getDescription());
+        dto.setDateTime(event.getDateTime());
+        dto.setStatus(event.getStatus());
+        dto.setPlaceId(event.getPlaceId());
+        
+        // Конвертация организатора
+        if (event.getOrganizerEvent() != null) {
+            OrganizerDTO organizerDTO = new OrganizerDTO();
+            organizerDTO.setOrganizerId(event.getOrganizerEvent().getOrganizerId());
+            organizerDTO.setName(event.getOrganizerEvent().getOrganizerName());
+            organizerDTO.setEmail(event.getOrganizerEvent().getEmail());
+            organizerDTO.setPhoneNumber(event.getOrganizerEvent().getPhoneNumber());
+            dto.setOrganizer(organizerDTO);
         }
-//        logger.logRequestDetails(HttpStatus.OK,currentTime,method,url,requestId,clientIp,executionTime,loginRequest,response);
-        return eventsRepository.save(event);
+        
+        // Конвертация участников
+        if (event.getCurrentParticipants() != null) {
+            List<ParticipantDTO> participantDTOs = event.getCurrentParticipants().getParticipants().stream()
+                .map(participant -> new ParticipantDTO(
+                    participant.getParticipantId(),
+                    participant.getParticipantName(),
+                    participant.getJoinedAt()
+                ))
+                .toList();
+            dto.setParticipants(participantDTOs);
+            dto.setParticipantsCount(event.getCurrentParticipants().getSize());
+        } else {
+            dto.setParticipants(new ArrayList<>());
+            dto.setParticipantsCount(0);
+        }
+        
+        // Установка дополнительных полей
+        dto.setJoinable(EventStatus.OPEN.name().equals(event.getStatus()));
+        dto.setMaxParticipants(event.getSportEvent().getMaxParticipants());
+        dto.setEventType(event.getSportEvent().getSportType());
+        dto.setLocation(event.getSportEvent().getLocation());
+        dto.setPrice(event.getSportEvent().getPrice());
+
+        return dto;
     }
 
-    public Event joinEvent(Long eventId,Long userId,String userName,String lang){
-        Event event = eventsRepository.findEventByEventId(eventId);
-        if(event == null){
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_not_found"));
-        }
-        List<CurrentParticipants> participants = event.getCurrentParticipants();
-
-        boolean isAlreadyJoined = participants.stream().anyMatch(p -> p.getParticipantId().equals(userId));
-        if(isAlreadyJoined){
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"user_already_joined"));
-        }
-
-        if(!event.getStatus().equalsIgnoreCase("OPEN")){
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_is_not_available"));
-        }
-
-        if (event.getDateTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_expired"));
-        }
-
-        participants.add(new CurrentParticipants(userId,userName));
-        event.setCurrentParticipants(participants);
-        return eventsRepository.save(event);
+    @Transactional
+    public EventDTO addEvent(Event event, String lang) {
+        validateEventDate(event.getDateTime(), lang);
+        // Устанавливаем начальный статус OPEN для нового события
+        event.setStatus(EventStatus.OPEN.name());
+        log.info("Creating new event: {}", event);
+        Event savedEvent = eventsRepository.save(event);
+        return convertToDTO(savedEvent);
     }
 
-    public Event getEventById(long eventId) {
-        return eventsRepository.findEventByEventId(eventId);
-    }
-
-
-    public Event eventAction(Long eventId,Long userId,String action,String lang){
-        Event event = eventsRepository.findEventByEventId(eventId);
-        if(event == null){
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_not_found"));
-        }
-        if(!Objects.equals(event.getOrganizerEvent().getOrganizerId(), userId)){
-            throw new IllegalArgumentException(returnTextToUserByLang(lang,"not_allowed")); // Смена состояния,если не организатор ивента
-        }
-
-        List<String> actions = new ArrayList<>();
-        actions.add("OPEN");
-        actions.add("CANCELLED");
-        actions.add("ONGOING");
-        actions.add("COMPLETED");
-        actions.add("EXPIRED");
-
-
-            if(!actions.contains(action)){
-                throw new IllegalArgumentException(returnTextToUserByLang(lang,"action_not_available"));
+    @Transactional
+    public EventDTO joinEvent(Long eventId, Long userId, String userName, String lang) {
+        Event event = findAndValidateEvent(eventId, lang);
+        validateEventJoinability(event, userId, lang);
+        
+        try {
+            log.info("Adding participant userId: {}, userName: {} to event: {}", userId, userName, eventId);
+            
+            if (event.getCurrentParticipants() == null) {
+                event.setCurrentParticipants(new CurrentParticipants());
             }
-
-
-        switch(event.getStatus().toUpperCase()){
-            case "CANCELLED":
-//                throw new IllegalArgumentException("Event was already cancelled");
-                throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_cancelled"));
-            case "COMPLETED":
-//                throw new IllegalArgumentException("Event was already completed");
-                throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_completed"));
-            case "EXPIRED":
-//                throw new IllegalArgumentException("Event was already expired");
-                throw new IllegalArgumentException(returnTextToUserByLang(lang,"event_already_expired"));
+            
+            event.getCurrentParticipants().addParticipant(userId, userName);
+            
+            // Явно устанавливаем размер
+            event.getCurrentParticipants().setSize(event.getCurrentParticipants().getParticipants().size());
+            
+            log.info("Current participants state: {}", event.getCurrentParticipants());
+            Event updatedEvent = eventsRepository.save(event);
+            log.info("Successfully added participant to event: {}", eventId);
+            return convertToDTO(updatedEvent);
+        } catch (Exception e) {
+            log.error("Error while adding participant to event: {}", eventId, e);
+            throw new RuntimeException("Error while adding participant: " + e.getMessage());
         }
-                /*
-        Разрешенные ивенты
-        OPEN - Ивент открыт для регистрации участников
-        CANCELLED - Организатор отменил ивент.
-        ONGOING - Ивент начался
-        COMPLETED - Ивент завершён
-                */
-        event.setStatus(action);
-        log.info("Organizer has changed event status to {}",action);
+    }
+
+    public EventDTO getEventById(long eventId, String lang) {
+        Event event = findAndValidateEvent(eventId, lang);
+        return convertToDTO(event);
+    }
+
+    @Transactional
+    public Event eventAction(Long eventId, Long userId, String action, String lang) {
+        Event event = findAndValidateEvent(eventId, lang);
+        validateEventOrganizer(event, userId, lang);
+        
+        EventStatus newStatus = validateAndGetEventStatus(action, lang);
+        EventStatus currentStatus = EventStatus.valueOf(event.getStatus().toUpperCase());
+        
+        if (!currentStatus.canTransitionTo(newStatus)) {
+            throw new EventValidationException("status_transition_error", 
+                String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+        }
+
+        event.setStatus(newStatus.name());
+        log.info("Event {} status changed to {} by organizer {}", eventId, newStatus, userId);
         return eventsRepository.save(event);
     }
 
-    public void getEventsForToday(LocalDate today) {
-        List<Event> events = eventsRepository.findOpenEventsForToday(today);
+    @Transactional
+    public List<Event> getEventsForToday(LocalDate today) {
+        try {
+            log.info("Processing events for today: {}", today);
+            List<Event> events = eventsRepository.findOpenEventsForToday(today);
+            LocalDateTime now = LocalDateTime.now();
+            
+            events.stream()
+                .filter(event -> event.getDateTime() != null && event.getDateTime().isBefore(now))
+                .forEach(event -> {
+                    try {
+                        log.info("Marking event {} as EXPIRED because its datetime {} is before now {}", 
+                            event.getEventId(), event.getDateTime(), now);
+                        event.setStatus(EventStatus.EXPIRED.name());
+                        eventsRepository.save(event);
+                    } catch (Exception e) {
+                        log.error("Error updating event {} status to EXPIRED", event.getEventId(), e);
+                    }
+                });
+            
+            log.info("Finished processing {} events for today", events.size());
+            return events;
+        } catch (Exception e) {
+            log.error("Error processing events for today", e);
+            throw e;
+        }
+    }
 
-
-        for (Event event : events) {
-            System.out.println(event.getDateTime());
-            if (event.getDateTime().isBefore(LocalDateTime.now())) {
-                event.setStatus("EXPIRED");
-                eventsRepository.save(event);
+    @Transactional
+    public EventDTO leaveEvent(Long eventId, Long participantId, String lang) {
+        Event event = findAndValidateEvent(eventId, lang);
+        validateEventLeaving(event, participantId, lang);
+        
+        try {
+            log.info("Removing participant {} from event {}", participantId, eventId);
+            
+            if (event.getCurrentParticipants() == null || 
+                !event.getCurrentParticipants().hasParticipant(participantId)) {
+                throw new EventValidationException("not_participant",
+                    returnTextToUserByLang(lang, "not_participant"));
             }
+            
+            event.getCurrentParticipants().removeParticipant(participantId);
+            
+            Event updatedEvent = eventsRepository.save(event);
+            log.info("Successfully removed participant from event: {}", eventId);
+            return convertToDTO(updatedEvent);
+        } catch (EventValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error while removing participant from event: {}", eventId, e);
+            throw new RuntimeException("Error while removing participant: " + e.getMessage());
+        }
+    }
+
+    private Event findAndValidateEvent(Long eventId, String lang) {
+        Event event = eventsRepository.findEventByEventId(eventId);
+        if (event == null) {
+            throw new EventNotFoundException(lang);
+        }
+        return event;
+    }
+
+    private void validateEventDate(LocalDateTime dateTime, String lang) {
+        if (dateTime.isBefore(LocalDateTime.now())) {
+            throw new EventValidationException("date_past_error",
+                    returnTextToUserByLang(lang, "date_past_error"));
+        }
+
+
+    }
+
+    private void validateEventJoinability(Event event, Long userId, String lang) {
+        if (!event.getStatus().equalsIgnoreCase(EventStatus.OPEN.name())) {
+            throw new EventValidationException("event_is_not_available", 
+                returnTextToUserByLang(lang, "event_is_not_available"));
+        }
+
+        if (event.getDateTime().isBefore(LocalDateTime.now())) {
+            throw new EventValidationException("event_already_expired", 
+                returnTextToUserByLang(lang, "event_already_expired"));
+        }
+
+        if (event.getCurrentParticipants() != null && 
+            event.getCurrentParticipants().hasParticipant(userId)) {
+            throw new EventValidationException("user_already_joined", 
+                returnTextToUserByLang(lang, "user_already_joined"));
+        }
+
+        if (event.getCurrentParticipants() != null && 
+            event.getCurrentParticipants().getSize() >= event.getSportEvent().getMaxParticipants()) {
+            throw new EventValidationException("event_is_full", 
+                returnTextToUserByLang(lang, "event_is_full"));
+        }
+    }
+
+    private void validateEventOrganizer(Event event, Long userId, String lang) {
+        if (!Objects.equals(event.getOrganizerEvent().getOrganizerId(), userId)) {
+            throw new EventValidationException("not_allowed", 
+                returnTextToUserByLang(lang, "not_allowed"));
+        }
+    }
+
+    private EventStatus validateAndGetEventStatus(String action, String lang) {
+        if (!EventStatus.isValid(action)) {
+            throw new EventValidationException("action_not_available", 
+                returnTextToUserByLang(lang, "action_not_available"));
+        }
+        return EventStatus.valueOf(action.toUpperCase());
+    }
+
+    private void validateEventLeaving(Event event, Long participantId, String lang) {
+        // Проверяем, является ли участник организатором
+        boolean isOrganizer = Objects.equals(event.getOrganizerEvent().getOrganizerId(), participantId);
+
+        if (isOrganizer) {
+            // Организатор может выйти только если событие отменено
+            if (!event.getStatus().equalsIgnoreCase(EventStatus.CANCELLED.name())) {
+                throw new EventValidationException("organizer_must_cancel_first",
+                    returnTextToUserByLang(lang, "organizer_must_cancel_first"));
+            }
+        } else {
+            // Обычный участник может выйти только если событие открыто
+            if (!event.getStatus().equalsIgnoreCase(EventStatus.OPEN.name())) {
+                throw new EventValidationException("event_not_open_for_leaving",
+                    returnTextToUserByLang(lang, "event_not_open_for_leaving"));
+            }
+        }
+
+        if (event.getCurrentParticipants() == null ||
+            !event.getCurrentParticipants().hasParticipant(participantId)) {
+            throw new EventValidationException("not_participant",
+                returnTextToUserByLang(lang, "not_participant"));
         }
     }
 
@@ -165,6 +326,22 @@ public class EventsService {
             case "ru_action_not_available" -> "Действие недоступно!";
             case "uz_action_not_available" -> "Harakat mavjud emas!";
             case "en_action_not_available" -> "This action is not available!";
+
+            case "ru_event_is_full" -> "Это мероприятие уже заполнено!";
+            case "uz_event_is_full" -> "Ushbu tadbir allaqachon to'ldirilgan!";
+            case "en_event_is_full" -> "This event is already full!";
+
+            case "ru_not_participant" -> "Вы не являетесь участником этого события!";
+            case "uz_not_participant" -> "Siz bu tadbirning ishtirokchisi emassiz!";
+            case "en_not_participant" -> "You are not a participant of this event!";
+
+            case "ru_event_not_open_for_leaving" -> "Вы не можете покинуть это событие, так как оно уже не открыто!";
+            case "uz_event_not_open_for_leaving" -> "Tadbir ochiq bo'lmaganligi sababli uni tark eta olmaysiz!";
+            case "en_event_not_open_for_leaving" -> "You cannot leave this event as it is no longer open!";
+
+            case "ru_organizer_must_cancel_first" -> "Организатор должен сначала отменить событие, прежде чем выйти из него!";
+            case "uz_organizer_must_cancel_first" -> "Tashkilotchi avval tadbirni bekor qilishi kerak, keyin undan chiqishi mumkin!";
+            case "en_organizer_must_cancel_first" -> "The organizer must cancel the event first before leaving it!";
 
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };
