@@ -8,8 +8,8 @@ import org.hibernate.annotations.TypeDefs;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @TypeDefs({
         @TypeDef(name = "json", typeClass = JsonType.class)
@@ -27,7 +27,7 @@ public class Event {
     @Column(name = "event_id")
     private Long eventId;
 
-    @Column(name = "place_id")
+    @Column(name = "place_id", nullable = false)
     private Long placeId;
 
     @Type(type = "json")
@@ -38,19 +38,21 @@ public class Event {
     @Column(name = "organizer_event", columnDefinition = "jsonb")
     private OrganizerEvent organizerEvent;
 
-    @Type(type = "json")
-    @Column(name = "current_participants", columnDefinition = "jsonb")
-    private List<CurrentParticipants> currentParticipants;
-
-
-    private String status;
-    private String description;
-
-    @Column(name = "skill_level")
-    private String skillLevel;
-
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     @Column(name = "date_time")
     private LocalDateTime dateTime;
+
+    @Type(type = "json")
+    @Column(name = "current_participants", columnDefinition = "jsonb")
+    @Builder.Default
+    private CurrentParticipants currentParticipants = new CurrentParticipants();
+
+    @Column(name = "status", length = 20)
+    private String status;
+
+    @Column(name = "description", columnDefinition = "text")
+    private String description;
+
+    @Column(name = "skill_level", length = 20)
+    private String skillLevel;
 }
 
