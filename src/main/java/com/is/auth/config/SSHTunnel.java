@@ -13,7 +13,7 @@ public class SSHTunnel {
         int sshPort = 22;
 
         String localHost = "localhost";
-        int localPort = 5433; // Изменен порт на 5433
+        int localPort = 5434; // Изменен порт на 5433
         String remoteHost = "localhost";
         int remotePort = 5432;
 

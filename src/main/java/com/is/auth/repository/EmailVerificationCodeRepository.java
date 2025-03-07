@@ -26,11 +26,10 @@ public interface EmailVerificationCodeRepository extends JpaRepository<EmailVeri
 
     @Modifying
     @Transactional
-    @Query("UPDATE User u SET u.isEmailVerified = true WHERE u.email = :email")
-    void updateUserIsEmailVerified(@Param("email") String email);
+    @Query("UPDATE User u SET u.emailVerified = true WHERE u.email = :email")
+    void updateUserIsEmailVerified(String email);
 
-    @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE u.email = :email AND u.isEmailVerified = true")
+    @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE u.email = :email AND u.emailVerified = true")
     boolean checkIsEmailVerified(@Param("email") String email);
-
 
 }

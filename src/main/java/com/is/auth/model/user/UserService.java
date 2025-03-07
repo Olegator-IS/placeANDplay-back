@@ -3,13 +3,16 @@ package com.is.auth.model.user;
 import com.is.auth.api.CustomAuthenticationProvider;
 import com.is.auth.config.JwtAuthenticationFilter;
 import com.is.auth.config.TokenSecurity;
+import com.is.auth.exception.UserAlreadyExistsException;
 import com.is.auth.model.ResponseAnswers.Response;
+import com.is.auth.model.enums.Language;
 import com.is.auth.model.locations.CitiesDTO;
 import com.is.auth.model.locations.CountriesDTO;
 import com.is.auth.model.logger.Logger;
 import com.is.auth.model.sports.SkillsDTO;
 import com.is.auth.model.sports.SportsDTO;
 import com.is.auth.repository.*;
+import com.is.auth.service.RequestLogger;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -23,6 +26,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
+
 import javax.crypto.SecretKey;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -32,53 +37,128 @@ import java.util.*;
 public class UserService {
 
     private final SecretKey secretKey;
+    private final RequestLogger requestLogger;
+    private final ListOfSportsRepository listOfSportsRepository;
+    private final UserRepository userRepository;
+    private final UserAdditionalInfoRepository userAdditionalInfoRepository;
+    private final CustomAuthenticationProvider customAuthenticationProvider;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final BCryptPasswordEncoder passwordEncoder;
+    private final ListOfSkillsRepository listOfSkillsRepository;
+    private final ListOfCitiesRepository listOfCitiesRepository;
+    private final ListOfCountriesRepository listOfCountriesRepository;
 
     @Autowired
     private Logger logger;
 
-    @Autowired
-    private ListOfSportsRepository listOfSportsRepository;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private UserAdditionalInfoRepository userAdditionalInfoRepository;
-
-    @Autowired
-    private CustomAuthenticationProvider customAuthenticationProvider;
-
-    @Autowired
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @Autowired
-    private BCryptPasswordEncoder passwordEncoder;
-
-    @Autowired
-    private ListOfSkillsRepository listOfSkillsRepository;
-
-    @Autowired
-    private ListOfCitiesRepository listOfCitiesRepository;
-
-    @Autowired
-    private ListOfCountriesRepository listOfCountriesRepository;
-
-    public UserService(SecretKey secretKey, JwtAuthenticationFilter jwtAuthenticationFilter,Logger logger) {
+    public UserService(SecretKey secretKey,
+                      JwtAuthenticationFilter jwtAuthenticationFilter,
+                      RequestLogger requestLogger,
+                      ListOfSportsRepository listOfSportsRepository,
+                      UserRepository userRepository,
+                      UserAdditionalInfoRepository userAdditionalInfoRepository,
+                      CustomAuthenticationProvider customAuthenticationProvider,
+                      BCryptPasswordEncoder passwordEncoder,
+                      ListOfSkillsRepository listOfSkillsRepository,
+                      ListOfCitiesRepository listOfCitiesRepository,
+                      ListOfCountriesRepository listOfCountriesRepository) {
         this.secretKey = secretKey;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.logger = logger;
+        this.requestLogger = requestLogger;
+        this.listOfSportsRepository = listOfSportsRepository;
+        this.userRepository = userRepository;
+        this.userAdditionalInfoRepository = userAdditionalInfoRepository;
+        this.customAuthenticationProvider = customAuthenticationProvider;
+        this.passwordEncoder = passwordEncoder;
+        this.listOfSkillsRepository = listOfSkillsRepository;
+        this.listOfCitiesRepository = listOfCitiesRepository;
+        this.listOfCountriesRepository = listOfCountriesRepository;
     }
 
-    public User registerUser(String email, String password, String firstName, String lastName) {
-        String passwordHash = passwordEncoder.encode(password);
-        User user = new User();
-        user.setEmail(email);
-        user.setPasswordHash(passwordHash);
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
-        user.setEmailVerified(false);
-        user.setRegistrationDate(LocalDateTime.now());
-        return userRepository.save(user);
+    private User createNewUser(String email, String password, String firstName, String lastName) {
+        return User.builder()
+                .email(email)
+                .passwordHash(passwordEncoder.encode(password))
+                .firstName(firstName)
+                .lastName(lastName)
+                .emailVerified(false)
+                .registrationDate(LocalDateTime.now())
+                .build();
+    }
+
+    private Map<String, String> generateTokens(String email, Authentication authentication) throws Exception {
+        String accessToken = jwtAuthenticationFilter.generateToken(email, authentication);
+        String refreshToken = jwtAuthenticationFilter.generateRefreshToken(email, authentication);
+        
+        if (accessToken.equals("Error")) {
+            throw new RuntimeException("Error generating token");
+        }
+
+        Map<String, String> tokens = new HashMap<>();
+        tokens.put("accessToken", TokenSecurity.encryptToken(accessToken, secretKey));
+        tokens.put("refreshToken", TokenSecurity.encryptToken(refreshToken, secretKey));
+        return tokens;
+    }
+
+    public ResponseEntity<Response> registrationRequest(String clientIp, String url, String method, String requestId,
+                                                      long currentTime, long executionTime, String language,
+                                                      RegistrationRequest registrationRequest) {
+        try {
+            if (userRepository.existsByEmail(registrationRequest.getEmail())) {
+                throw new UserAlreadyExistsException(registrationRequest.getEmail());
+            }
+
+            User user = createNewUser(
+                    registrationRequest.getEmail(),
+                    registrationRequest.getPassword(),
+                    registrationRequest.getFirstName(),
+                    registrationRequest.getLastName()
+            );
+            user = userRepository.save(user);
+
+            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
+            requestLogger.logRequest(HttpStatus.CREATED, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationRequest, response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        } catch (UserAlreadyExistsException e) {
+            Response response = new Response("EMAIL_IS_ALREADY_EXIST", "Email already in use",
+                    HttpStatus.CONFLICT.value());
+            requestLogger.logRequest(HttpStatus.CONFLICT, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationRequest, response);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        } catch (Exception e) {
+            log.error("Error during user registration", e);
+            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "Registration failed",
+                    e.getMessage());
+            requestLogger.logRequest(HttpStatus.BAD_REQUEST, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationRequest, response);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    @Cacheable(value = "sports", key = "#language")
+    public List<SportsDTO> getSportsByLanguage(String language) {
+        String columnName = Language.getColumnNameByCode(language);
+        return listOfSportsRepository.findByLanguage(columnName);
+    }
+
+    @Cacheable(value = "skills", key = "#language")
+    public List<SkillsDTO> getListOfSkills(String language) {
+        String columnName = Language.getColumnNameByCode(language);
+        return listOfSkillsRepository.findByLanguage(columnName);
+    }
+
+    @Cacheable(value = "cities", key = "#language + '-' + #countryCode")
+    public List<CitiesDTO> getListOfCities(String language, Integer countryCode) {
+        String columnName = Language.getColumnNameByCode(language);
+        return listOfCitiesRepository.findByLanguage(columnName, countryCode);
+    }
+
+    @Cacheable(value = "countries", key = "#language")
+    public List<CountriesDTO> getListOfCountries(String language) {
+        String columnName = Language.getColumnNameByCode(language);
+        return listOfCountriesRepository.findByLanguage(columnName);
     }
 
     public UserAdditionalInfo  registerUser(long userId, String hobbies, List<FavoriteSport> favoriteSportList,
@@ -134,7 +214,7 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Response> validateTokenAndGetSubject(String accessToken, String refreshToken) {
+    public ResponseEntity<Response> validateTokenAndGetSubject(String accessToken, String refreshToken,String language) {
         try {
             String decryptedToken = TokenSecurity.decryptToken(accessToken, secretKey);
             Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
@@ -191,7 +271,7 @@ public class UserService {
         return additionalInfo;
     }
 
-    public ResponseEntity<Response> refreshToken(String refreshToken) {
+    public ResponseEntity<Response> refreshToken(String refreshToken,String language) {
         Response response = new Response(200, "OK", "Успешно");
         try {
             String decryptedToken = TokenSecurity.decryptToken(refreshToken, secretKey);
@@ -223,38 +303,8 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Response> registrationRequest(String clientIp,String url,String method,String requestId,
-                                                        long currentTime,long executionTime,
-                                                        RegistrationRequest registrationRequest) {
-        if (userRepository.existsByEmail(registrationRequest.getEmail())) {
-            Response response = new Response("EMAIL_IS_ALREADY_EXIST", "Email already in use",
-                    HttpStatus.CONFLICT.value());
-            logger.logRequestDetails(HttpStatus.CONFLICT,currentTime,method,url,requestId,clientIp,executionTime,registrationRequest,response);
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
-        }
-
-        try {
-            User user = registerUser(
-                    registrationRequest.getEmail(),
-                    registrationRequest.getPassword(),
-                    registrationRequest.getFirstName(),
-                    registrationRequest.getLastName()
-            );
-
-            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
-            logger.logRequestDetails(HttpStatus.CREATED,currentTime,method,url,requestId,clientIp,executionTime,registrationRequest,response);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-
-        } catch (Exception e) {
-            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "SOMETHING_WRONG",
-                    "Error during processing, try again");
-            logger.logRequestDetails(HttpStatus.BAD_REQUEST,currentTime,method,url,requestId,clientIp,executionTime,registrationRequest,e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-    }
-
     public ResponseEntity<Response> registrationAddInfo(String clientIp,String url,String method,String requestId,
-                                                        long currentTime,long executionTime,
+                                                        long currentTime,long executionTime,String language,
                                                         RegistrationAddInfoRequest registrationAddInfoRequest) {
         try {
 
@@ -276,7 +326,8 @@ public class UserService {
     }
 
     public ResponseEntity<Response> loginRequest(String clientIp,String url,String method,String requestId,
-                                                 long currentTime,long executionTime,LoginRequest loginRequest,
+                                                 long currentTime,long executionTime,
+                                                 String language,LoginRequest loginRequest,
                                                  boolean isUser) {
         if (!userRepository.existsByEmail(loginRequest.getEmail())&&isUser) {
             Response response = new Response("EMAIL_IS_NOT_FOUND", "Required email is not found",
@@ -311,74 +362,6 @@ public class UserService {
             logger.logRequestDetails(HttpStatus.UNAUTHORIZED,currentTime,method,url,requestId,clientIp,executionTime,loginRequest,response);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-    }
-
-    public List<SportsDTO> getSportsByLanguage(String language) {
-        String columnName = switch (language) {
-            case "ru" -> "name_ru";
-            case "en" -> "name_en";
-            case "uz" -> "name_uz";
-            default -> throw new IllegalArgumentException("Unsupported language: " + language);
-        };
-
-        return listOfSportsRepository.findByLanguage(columnName);
-    }
-
-    public List<SkillsDTO> getListOfSkills(String language) {
-        String columnName;
-        switch (language) {
-            case "ru":
-                columnName = "name_ru";
-                break;
-            case "en":
-                columnName = "name_en";
-                break;
-            case "uz":
-                columnName = "name_uz";
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported language: " + language);
-        }
-
-        return listOfSkillsRepository.findByLanguage(columnName);
-    }
-
-    public List<CitiesDTO> getListOfCities(String language,Integer countryCode) {
-        String columnName;
-        switch (language) {
-            case "ru":
-                columnName = "name_ru";
-                break;
-            case "en":
-                columnName = "name_en";
-                break;
-            case "uz":
-                columnName = "name_uz";
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported language: " + language);
-        }
-
-        return listOfCitiesRepository.findByLanguage(columnName,countryCode);
-    }
-
-    public List<CountriesDTO> getListOfCountries(String language) {
-        String columnName;
-        switch (language) {
-            case "ru":
-                columnName = "name_ru";
-                break;
-            case "en":
-                columnName = "name_en";
-                break;
-            case "uz":
-                columnName = "name_uz";
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported language: " + language);
-        }
-
-        return listOfCountriesRepository.findByLanguage(columnName);
     }
 }
 

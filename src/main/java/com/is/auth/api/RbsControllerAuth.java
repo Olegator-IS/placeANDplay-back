@@ -49,10 +49,12 @@ public class RbsControllerAuth {
                                             @RequestAttribute("method") String method,
                                             @RequestAttribute("Request-Id") String requestId,
                                             @RequestAttribute("startTime") long startTime,
+                                            @RequestHeader(value = "language", required = true) String language,
                                             @RequestBody RegistrationRequest registrationRequest) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
-        return userService.registrationRequest(clientIp,url,method,requestId,currentTime,executionTime,registrationRequest);
+        return userService.registrationRequest(clientIp,url,method,requestId,currentTime,executionTime,language,registrationRequest);
     }
 
     @PostMapping("/login")
@@ -61,22 +63,31 @@ public class RbsControllerAuth {
                                        @RequestAttribute("method") String method,
                                        @RequestAttribute("Request-Id") String requestId,
                                        @RequestAttribute("startTime") long startTime,
+                                       @RequestHeader(value = "language", required = true) String language,
                                        @RequestHeader(value = "isUser", required = false, defaultValue = "true") Boolean isUser,
                                        @RequestBody LoginRequest loginRequest) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
         System.out.println("test");
-        return userService.loginRequest(clientIp,url,method,requestId,currentTime,executionTime,loginRequest,isUser);
+        return userService.loginRequest(clientIp,url,method,requestId,currentTime,executionTime,language,loginRequest,isUser);
     }
 
     @GetMapping("/getUserInfo")
-    public ResponseEntity<?> getUserInfo(@RequestHeader String accessToken,@RequestHeader String refreshToken) {
-        return userService.validateTokenAndGetSubject(accessToken,refreshToken);
+    public ResponseEntity<?> getUserInfo(
+                                        @RequestHeader(value = "language", required = true) String language,
+                                        @RequestHeader String accessToken,
+                                        @RequestHeader String refreshToken) {
+        validateLanguage(language);
+        return userService.validateTokenAndGetSubject(accessToken,refreshToken,language);
     }
 
     @GetMapping("/getUserInfoRefreshToken")
-    public ResponseEntity<?> getUserInfoRefreshToken(@RequestHeader String refreshToken) {
-        return userService.refreshToken(refreshToken);
+    public ResponseEntity<?> getUserInfoRefreshToken(
+                                                    @RequestHeader(value = "language", required = true) String language,
+                                                    @RequestHeader String refreshToken) {
+        validateLanguage(language);
+        return userService.refreshToken(refreshToken,language);
     }
 
     @PatchMapping("/registrationAddInfo")
@@ -85,11 +96,14 @@ public class RbsControllerAuth {
                                                    @RequestAttribute("method") String method,
                                                    @RequestAttribute("Request-Id") String requestId,
                                                    @RequestAttribute("startTime") long startTime,
-                                                   @RequestHeader String accessToken,@RequestHeader String refreshToken,
+                                                   @RequestHeader(value = "language", required = true) String language,
+                                                   @RequestHeader String accessToken,
+                                                   @RequestHeader String refreshToken,
                                                    @RequestBody RegistrationAddInfoRequest registrationAddInfoRequest) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
-        return userService.registrationAddInfo(clientIp,url,method,requestId,currentTime,executionTime,registrationAddInfoRequest);
+        return userService.registrationAddInfo(clientIp,url,method,requestId,currentTime,executionTime,language,registrationAddInfoRequest);
     }
 
     @GetMapping("/getListOfSports")
@@ -99,9 +113,8 @@ public class RbsControllerAuth {
             @RequestAttribute("method") String method,
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
-//            @RequestHeader String accessToken,
-//            @RequestHeader String refreshToken,
-            @RequestHeader(value = "language", required = true, defaultValue = "en") String language    ) {
+            @RequestHeader(value = "language", required = true) String language) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -116,9 +129,8 @@ public class RbsControllerAuth {
             @RequestAttribute("method") String method,
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
-//            @RequestHeader String accessToken,
-//            @RequestHeader String refreshToken,
-            @RequestHeader(value = "language", required = true, defaultValue = "en") String language    ) {
+            @RequestHeader(value = "language", required = true) String language) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -133,9 +145,11 @@ public class RbsControllerAuth {
             @RequestAttribute("method") String method,
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
-            @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
+            @RequestHeader(value = "language", required = true) String language,
             @RequestHeader(value = "countryCode", required = true) Integer countryCode,
-            @RequestHeader String accessToken,@RequestHeader String refreshToken) {
+            @RequestHeader String accessToken,
+            @RequestHeader String refreshToken) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -150,8 +164,10 @@ public class RbsControllerAuth {
             @RequestAttribute("method") String method,
             @RequestAttribute("Request-Id") String requestId,
             @RequestAttribute("startTime") long startTime,
-            @RequestHeader(value = "language", required = true, defaultValue = "en") String language,
-            @RequestHeader String accessToken,@RequestHeader String refreshToken) {
+            @RequestHeader(value = "language", required = true) String language,
+            @RequestHeader String accessToken,
+            @RequestHeader String refreshToken) {
+        validateLanguage(language);
         long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
         long executionTime = currentTime - startTime; // Request execution time
 
@@ -161,16 +177,20 @@ public class RbsControllerAuth {
 
     @GetMapping("/emailVerification")
     public ResponseEntity<?> sendCodeToMail(@RequestParam String email,
-                                            @RequestHeader(value = "language", required = true, defaultValue = "ru") String language,
-                                            @RequestHeader String accessToken,@RequestHeader String refreshToken) throws MessagingException {
+                                            @RequestHeader(value = "language", required = true) String language,
+                                            @RequestHeader String accessToken,
+                                            @RequestHeader String refreshToken) throws MessagingException {
+        validateLanguage(language);
         return emailService.sendVerificationEmail(email,language);
     }
 
     @GetMapping("/verifyCode")
     public ResponseEntity<?> verifyCode(@RequestParam String email,
                                         @RequestParam int code,
-                                        @RequestHeader(value = "language", required = true, defaultValue = "ru") String language,
-                                        @RequestHeader String accessToken,@RequestHeader String refreshToken) throws MessagingException {
+                                        @RequestHeader(value = "language", required = true) String language,
+                                        @RequestHeader String accessToken,
+                                        @RequestHeader String refreshToken) throws MessagingException {
+        validateLanguage(language);
         return emailService.verifyCode(email,code,language);
     }
     @GetMapping("/testSystem")
@@ -178,4 +198,9 @@ public class RbsControllerAuth {
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
+    private void validateLanguage(String language) {
+        if (!language.equals("ru") && !language.equals("en") && !language.equals("uz")) {
+            throw new IllegalArgumentException("Unsupported language. Supported languages are: ru, en, uz");
+        }
+    }
 }
