@@ -1,5 +1,6 @@
 package com.is.auth.api;
 
+import com.is.auth.model.ResponseAnswers.Response;
 import com.is.auth.model.ResponseAnswers.ResponseToken;
 import com.is.auth.model.locations.CitiesDTO;
 import com.is.auth.model.locations.CountriesDTO;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.mail.MessagingException;
 import java.util.List;
@@ -196,6 +198,20 @@ public class RbsControllerAuth {
     @GetMapping("/testSystem")
     public ResponseEntity<ResponseToken> getUserInfo(){
         return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PostMapping("/upload-profile-picture")
+    @ApiOperation(value = "Upload profile picture", notes = "Upload a profile picture for the user")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Successfully uploaded profile picture"),
+        @ApiResponse(code = 400, message = "Bad request"),
+        @ApiResponse(code = 500, message = "Internal server error")
+    })
+    public ResponseEntity<Response> uploadProfilePicture(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("userId") Long userId,
+            @RequestHeader(value = "language", defaultValue = "ru") String language) {
+        return userService.uploadProfilePicture(file, userId);
     }
 
     private void validateLanguage(String language) {

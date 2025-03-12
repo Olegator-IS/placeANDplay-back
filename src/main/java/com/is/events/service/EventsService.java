@@ -30,6 +30,7 @@ public class EventsService {
 
     private final EventsRepository eventsRepository;
     private final LocalizationService localizationService;
+    private final UserProfileService userProfileService;
 
 //    @Autowired
 //    private Logger logger;
@@ -64,17 +65,35 @@ public class EventsService {
             organizerDTO.setName(event.getOrganizerEvent().getOrganizerName());
             organizerDTO.setEmail(event.getOrganizerEvent().getEmail());
             organizerDTO.setPhoneNumber(event.getOrganizerEvent().getPhoneNumber());
+            
+            // Добавляем URL профильного изображения организатора
+            try {
+                String profilePictureUrl = userProfileService.getProfilePictureUrl(event.getOrganizerEvent().getOrganizerId());
+                organizerDTO.setProfilePictureUrl(profilePictureUrl);
+            } catch (Exception e) {
+                log.warn("Could not fetch profile picture for organizer {}", event.getOrganizerEvent().getOrganizerId());
+            }
+            
             dto.setOrganizer(organizerDTO);
         }
         
         // Конвертация участников
         if (event.getCurrentParticipants() != null) {
             List<ParticipantDTO> participantDTOs = event.getCurrentParticipants().getParticipants().stream()
-                .map(participant -> new ParticipantDTO(
-                    participant.getParticipantId(),
-                    participant.getParticipantName(),
-                    participant.getJoinedAt()
-                ))
+                .map(participant -> {
+                    String profilePictureUrl = null;
+                    try {
+                        profilePictureUrl = userProfileService.getProfilePictureUrl(participant.getParticipantId());
+                    } catch (Exception e) {
+                        log.warn("Could not fetch profile picture for participant {}", participant.getParticipantId());
+                    }
+                    return new ParticipantDTO(
+                        participant.getParticipantId(),
+                        participant.getParticipantName(),
+                        participant.getJoinedAt(),
+                        profilePictureUrl
+                    );
+                })
                 .toList();
             dto.setParticipants(participantDTOs);
             dto.setParticipantsCount(event.getCurrentParticipants().getSize());
@@ -346,5 +365,26 @@ public class EventsService {
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };
     }
+
+    public List<EventDTO> getLastCompletedEventsForUser(Long userId) {
+        log.info("Getting last completed events for user {}", userId);
+        
+        List<Event> events = eventsRepository.findLastThreeCompletedEventsByUser(userId);
+        
+        return events.stream()
+                .map(this::convertToDTO)
+                .toList();
+    }
+    public List<EventDTO> getUserActivityEvents(Long userId) {
+        log.info("Getting all user's activity events {}", userId);
+
+        List<Event> events = eventsRepository.findAllActivityByUser(userId);
+
+        return events.stream()
+                .map(this::convertToDTO)
+                .toList();
+    }
+
+
 
 }

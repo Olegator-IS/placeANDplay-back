@@ -8,6 +8,7 @@ public class ParticipantDTO {
     private Long participantId;
     private String participantName;
     private LocalDateTime joinedAt;
+    private String profilePictureUrl;
     private String status; // например: ACTIVE, CANCELLED
     
     // Конструктор для удобства создания
@@ -15,6 +16,15 @@ public class ParticipantDTO {
         this.participantId = participantId;
         this.participantName = participantName;
         this.joinedAt = joinedAt;
+        this.status = "ACTIVE";
+    }
+    
+    // Конструктор для создания с профилем
+    public ParticipantDTO(Long participantId, String participantName, LocalDateTime joinedAt, String profilePictureUrl) {
+        this.participantId = participantId;
+        this.participantName = participantName;
+        this.joinedAt = joinedAt;
+        this.profilePictureUrl = profilePictureUrl;
         this.status = "ACTIVE";
     }
     

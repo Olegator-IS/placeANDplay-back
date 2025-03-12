@@ -10,4 +10,5 @@ public class OrganizerDTO {
     private String phoneNumber;
     private String organizationType; // например: INDIVIDUAL, COMPANY, CLUB
     private Double rating;
+    private String profilePictureUrl;
 } 

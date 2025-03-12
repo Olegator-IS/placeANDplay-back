@@ -27,4 +27,35 @@ public interface EventsRepository extends JpaRepository<Event, Long> {
     List<Event> findByStatusAndDateTimeBefore(String status, LocalDateTime dateTime);
     
     List<Event> findByStatus(String status);
+
+    @Query(value = """
+            SELECT DISTINCT e.* FROM events.events e 
+            WHERE e.status = 'COMPLETED' 
+            AND (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            ORDER BY e.date_time DESC 
+            LIMIT 3
+            """, nativeQuery = true)
+    List<Event> findLastThreeCompletedEventsByUser(Long userId);
+
+    @Query(value = """
+            SELECT DISTINCT e.* FROM events.events e 
+            WHERE e.status = 'OPEN'
+            AND (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            ORDER BY e.date_time DESC 
+            """, nativeQuery = true)
+    List<Event> findAllActivityByUser(Long userId);
 }
