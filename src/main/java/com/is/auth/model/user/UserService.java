@@ -13,6 +13,7 @@ import com.is.auth.model.sports.SkillsDTO;
 import com.is.auth.model.sports.SportsDTO;
 import com.is.auth.repository.*;
 import com.is.auth.service.RequestLogger;
+import com.is.auth.service.FileStorageService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -27,8 +28,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.beans.factory.annotation.Value;
 
 import javax.crypto.SecretKey;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -47,9 +56,13 @@ public class UserService {
     private final ListOfSkillsRepository listOfSkillsRepository;
     private final ListOfCitiesRepository listOfCitiesRepository;
     private final ListOfCountriesRepository listOfCountriesRepository;
+    private final FileStorageService fileStorageService;
 
     @Autowired
     private Logger logger;
+
+    @Value("${app.upload.dir:${user.home}/uploads}")
+    private String uploadDir;
 
     public UserService(SecretKey secretKey,
                       JwtAuthenticationFilter jwtAuthenticationFilter,
@@ -61,7 +74,8 @@ public class UserService {
                       BCryptPasswordEncoder passwordEncoder,
                       ListOfSkillsRepository listOfSkillsRepository,
                       ListOfCitiesRepository listOfCitiesRepository,
-                      ListOfCountriesRepository listOfCountriesRepository) {
+                      ListOfCountriesRepository listOfCountriesRepository,
+                      FileStorageService fileStorageService) {
         this.secretKey = secretKey;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.requestLogger = requestLogger;
@@ -73,6 +87,7 @@ public class UserService {
         this.listOfSkillsRepository = listOfSkillsRepository;
         this.listOfCitiesRepository = listOfCitiesRepository;
         this.listOfCountriesRepository = listOfCountriesRepository;
+        this.fileStorageService = fileStorageService;
     }
 
     private User createNewUser(String email, String password, String firstName, String lastName) {
@@ -266,8 +281,12 @@ public class UserService {
                 : "No hobbies");
         additionalInfo.put("bio", user != null ? userAddInfo.map(info -> info.getBio()).orElse("No bio")
                 : "No bio");
-        additionalInfo.put("favoriteSports", user != null ? userAddInfo.map(info -> info.getFavoriteSportObjects())
-                : "[]");
+        additionalInfo.put("profile_picture_url", user != null ? userAddInfo.map(info -> info.getProfilePictureUrl()).orElse("")
+                : "");
+        additionalInfo.put("favoriteSports", user != null ? userAddInfo.map(info -> {
+            Object sports = info.getFavoriteSportObjects();
+            return sports != null ? sports : new ArrayList<>();
+        }).orElse(new ArrayList<>()) : new ArrayList<>());
         return additionalInfo;
     }
 
@@ -361,6 +380,32 @@ public class UserService {
                     HttpStatus.BAD_REQUEST.value());
             logger.logRequestDetails(HttpStatus.UNAUTHORIZED,currentTime,method,url,requestId,clientIp,executionTime,loginRequest,response);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    public ResponseEntity<Response> uploadProfilePicture(MultipartFile file, Long userId) {
+        try {
+            // Проверяем существование пользователя'
+            log.info("Полученный userID при смене аватара {}",userId);
+            Optional<UserAdditionalInfo> userInfo = userAdditionalInfoRepository.findById(userId);
+            if (!userInfo.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new Response(404, "USER_NOT_FOUND", "User not found"));
+            }
+
+            // Загружаем файл в локальное хранилище
+            String fileUrl = fileStorageService.uploadFile(file, "profile-pictures");
+            
+            // Обновляем URL в базе данных
+            UserAdditionalInfo info = userInfo.get();
+            info.setProfilePictureUrl(fileUrl);
+            userAdditionalInfoRepository.save(info);
+            
+            return ResponseEntity.ok(new Response(200, "PROFILE_PICTURE_UPDATED", fileUrl));
+        } catch (Exception e) {
+            log.error("Error uploading profile picture for user {}: {}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new Response(500, "UPLOAD_ERROR", "Error uploading file"));
         }
     }
 }

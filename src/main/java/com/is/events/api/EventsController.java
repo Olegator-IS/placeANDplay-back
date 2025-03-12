@@ -116,4 +116,20 @@ public class EventsController {
         log.info("Participant {} leaving event {}", participantId, eventId);
         return ResponseEntity.ok(eventsService.leaveEvent(eventId, participantId, language));
     }
+
+    @GetMapping("/last-completed")
+    public ResponseEntity<List<EventDTO>> getLastCompletedEvents(
+            @RequestParam Long userId,
+            @RequestHeader(value = "language", defaultValue = "ru") String lang) {
+        log.info("GET /last-completed request received for user {}", userId);
+        return ResponseEntity.ok(eventsService.getLastCompletedEventsForUser(userId));
+    }
+
+    @GetMapping("/user-activity-events")
+    public ResponseEntity<List<EventDTO>> getUserActivityEvents(
+            @RequestParam Long userId,
+            @RequestHeader(value = "language", defaultValue = "ru") String lang) {
+        log.info("GET /last-completed request received for user {}", userId);
+        return ResponseEntity.ok(eventsService.getUserActivityEvents(userId));
+    }
 }
