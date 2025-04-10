@@ -11,9 +11,9 @@
 	<groupId>com.is</groupId>
 	<artifactId>rbs</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<packaging>war</packaging>
-	<name>rbs</name>
-	<description>remote banking system service</description>
+	<packaging>jar</packaging>
+	<name>PlaceAndPlay</name>
+	<description>Back service of my social network PlaceAndPlay</description>
 	<properties>
 		<java.version>1.8</java.version>
 		<start-class>com.is.RbsApplication</start-class>

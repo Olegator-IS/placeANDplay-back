@@ -20,6 +20,10 @@ public interface ListOfSportsRepository extends JpaRepository<Sports, Long> {
             "WHEN :language = 'name_uz' THEN s.name_uz END) " +
             "FROM Sports s")
     List<SportsDTO> findByLanguage(@Param("language") String language);
+
+    @Query("SELECT s.attr_model FROM Sports s WHERE s.id = :id")
+    String findBySportId(@Param("id") int sportId);
+
 }
 
 

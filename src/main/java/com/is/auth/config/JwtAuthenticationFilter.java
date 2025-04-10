@@ -72,6 +72,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
          }
 
+    public static String generateTokenForOrg(String username, String role) {
+        Date now = new Date();
+        Date expirationDate = new Date(now.getTime() + 120000); // Токен на 1 час
+        try{
+            return Jwts.builder()
+                    .setSubject(username)
+                    .claim("role", role)
+                    .setIssuedAt(now)
+                    .setExpiration(expirationDate)
+                    .signWith(SECRET_KEY)
+                    .compact();
+        }catch (Exception e){
+
+            return "Error";
+
+        }
+    }
+
+    public static String generateRefreshTokenForOrg(String username,String role) {
+        Date now = new Date();
+        Date expirationDate = new Date(now.getTime() + 604800000); // Токен на 7 дней
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("role", role)
+                .setIssuedAt(now)
+                .setExpiration(expirationDate)
+                .signWith(SECRET_KEY)
+                .compact();
+    }
+
     public static String generateRefreshToken(String username,Authentication authentication) {
         Date now = new Date();
         Date expirationDate = new Date(now.getTime() + 604800000); // Токен на 7 дней

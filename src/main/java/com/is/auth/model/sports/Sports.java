@@ -26,4 +26,7 @@ public class Sports {
     @JsonProperty("name_uz")
     private String name_uz;
 
+    @JsonProperty("attr_model")
+    private String attr_model;
+
 }

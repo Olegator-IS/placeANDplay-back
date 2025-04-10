@@ -124,6 +124,21 @@ public class RbsControllerAuth {
         return userService.getSportsByLanguage(language);
     }
 
+    @GetMapping("/getAttrModelBySport")
+    public String getAttrModel(
+            @RequestAttribute("clientIp") String clientIp,
+            @RequestAttribute("url") String url,
+            @RequestAttribute("method") String method,
+            @RequestAttribute("Request-Id") String requestId,
+            @RequestAttribute("startTime") long startTime,
+            @RequestParam int sportId,
+            @RequestHeader(value = "language", required = true) String language) {
+        validateLanguage(language);
+        long currentTime = System.currentTimeMillis(); // This is needed for execution time calculation
+        long executionTime = currentTime - startTime; // Request execution time
+        return userService.getAttrModelBySport(sportId,language);
+    }
+
     @GetMapping("/getListOfSkills")
     public List<SkillsDTO> getListOfSkills(
             @RequestAttribute("clientIp") String clientIp,

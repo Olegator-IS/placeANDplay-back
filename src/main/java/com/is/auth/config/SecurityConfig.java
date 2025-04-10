@@ -40,7 +40,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         http
                 .csrf().disable()
                 .authorizeRequests()
-                .antMatchers("/api/auth/**","/api/private/v1/**", "/v2/api-docs", "/configuration/ui",
+                .antMatchers("/api/auth/**","api/organizations","/api/private/v1/**", "/v2/api-docs", "/configuration/ui",
                         "/swagger-resources/**", "/configuration/security", "/swagger-ui.html", "/webjars/**",
                         "/swagger-ui/**","/api/private/places/**").permitAll()
                 .antMatchers("/api/private/events/**").authenticated() // Для этих маршрутов нужен токен
