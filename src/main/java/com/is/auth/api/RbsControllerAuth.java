@@ -11,38 +11,60 @@ import com.is.auth.model.user.RegistrationAddInfoRequest;
 import com.is.auth.model.user.RegistrationRequest;
 import com.is.auth.model.user.UserService;
 import com.is.auth.service.EmailService;
+import com.is.events.service.WebSocketService;
 import io.swagger.annotations.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.socket.messaging.SessionConnectedEvent;
+import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import javax.mail.MessagingException;
 import java.util.List;
 
-
 @Api(tags = "Available APIs for the IDP", description = "List of methods for interacting with IDP")
-
 @RestController
 @SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/auth")
 public class RbsControllerAuth {
 
-
     private static final Logger log = LoggerFactory.getLogger(RbsControllerAuth.class);
     private final UserService userService;
     private final EmailService emailService;
-
+    private final WebSocketService webSocketService;
 
     @Autowired
-    public RbsControllerAuth(UserService userService,EmailService emailService) {
+    public RbsControllerAuth(UserService userService, EmailService emailService, WebSocketService webSocketService) {
         log.info("RbsControllerAuth initialized!");
         this.userService = userService;
         this.emailService = emailService;
+        this.webSocketService = webSocketService;
+    }
+
+    public void notifyEventUpdate(Long placeId) {
+        try {
+            webSocketService.notifyEventUpdate(placeId);
+        } catch (Exception e) {
+            log.error("Error sending WebSocket notification", e);
+        }
+    }
+
+    // Этот метод вызывается при подключении клиента
+    @EventListener
+    public void handleWebSocketConnectListener(SessionConnectedEvent event) {
+        log.info("Received a new web socket connection");
+    }
+
+    // Этот метод вызывается при отключении клиента
+    @EventListener
+    public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
+        log.info("Client disconnected from web socket");
     }
 
     @PostMapping("/registration")
@@ -234,4 +256,8 @@ public class RbsControllerAuth {
             throw new IllegalArgumentException("Unsupported language. Supported languages are: ru, en, uz");
         }
     }
+}
+
+record EventUpdateMessage(Long placeId) {
+    // Можно добавить дополнительные поля, если нужно передавать больше информации
 }

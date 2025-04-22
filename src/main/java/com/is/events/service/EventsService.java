@@ -11,6 +11,7 @@ import com.is.events.model.enums.EventStatus;
 import com.is.events.repository.EventsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.Cacheable;
@@ -31,6 +32,7 @@ public class EventsService {
     private final EventsRepository eventsRepository;
     private final LocalizationService localizationService;
     private final UserProfileService userProfileService;
+    private final WebSocketService webSocketService;
 
 //    @Autowired
 //    private Logger logger;
@@ -112,6 +114,11 @@ public class EventsService {
         return dto;
     }
 
+    @Transactional(readOnly = true)
+    public Page<Event> findAll(Specification<Event> spec, Pageable pageable) {
+        return eventsRepository.findAll(spec, pageable);
+    }
+
     @Transactional
     public EventDTO addEvent(Event event, String lang) {
         validateEventDate(event.getDateTime(), lang);
@@ -119,6 +126,7 @@ public class EventsService {
         event.setStatus(EventStatus.OPEN.name());
         log.info("Creating new event: {}", event);
         Event savedEvent = eventsRepository.save(event);
+        webSocketService.notifyEventUpdate(event.getPlaceId());
         return convertToDTO(savedEvent);
     }
 
@@ -135,12 +143,17 @@ public class EventsService {
             }
             
             event.getCurrentParticipants().addParticipant(userId, userName);
-            
-            // Явно устанавливаем размер
             event.getCurrentParticipants().setSize(event.getCurrentParticipants().getParticipants().size());
             
             log.info("Current participants state: {}", event.getCurrentParticipants());
             Event updatedEvent = eventsRepository.save(event);
+            
+            try {
+                webSocketService.notifyEventUpdate(event.getPlaceId());
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for event {}: {}", eventId, e.getMessage());
+            }
+            
             log.info("Successfully added participant to event: {}", eventId);
             return convertToDTO(updatedEvent);
         } catch (Exception e) {
@@ -169,7 +182,15 @@ public class EventsService {
 
         event.setStatus(newStatus.name());
         log.info("Event {} status changed to {} by organizer {}", eventId, newStatus, userId);
-        return eventsRepository.save(event);
+        Event savedEvent = eventsRepository.save(event);
+        
+        try {
+            webSocketService.notifyEventUpdate(event.getPlaceId());
+        } catch (Exception e) {
+            log.error("Failed to send WebSocket notification for event status change {}: {}", eventId, e.getMessage());
+        }
+        
+        return savedEvent;
     }
 
     @Transactional
@@ -217,6 +238,13 @@ public class EventsService {
             event.getCurrentParticipants().removeParticipant(participantId);
             
             Event updatedEvent = eventsRepository.save(event);
+            
+            try {
+                webSocketService.notifyEventUpdate(event.getPlaceId());
+            } catch (Exception e) {
+                log.error("Failed to send WebSocket notification for participant leaving event {}: {}", eventId, e.getMessage());
+            }
+            
             log.info("Successfully removed participant from event: {}", eventId);
             return convertToDTO(updatedEvent);
         } catch (EventValidationException e) {

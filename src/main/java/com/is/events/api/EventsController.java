@@ -2,6 +2,8 @@ package com.is.events.api;
 
 import com.is.events.dto.EventDTO;
 import com.is.events.model.Event;
+import com.is.events.model.EventFilterDTO;
+import com.is.events.model.EventSpecification;
 import com.is.events.service.EventsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,6 +37,31 @@ public class EventsController {
             @RequestBody @Valid Event event,
             @RequestHeader(defaultValue = "ru") String language) {
         return ResponseEntity.ok(eventsService.addEvent(event, language));
+    }
+
+    @GetMapping("/pagination")
+    public ResponseEntity<Page<Event>> getEvents(EventFilterDTO filter) {
+        // Создаем объект сортировки
+        Sort sort = Sort.by(
+                filter.getSortDirection().equalsIgnoreCase("ASC") ?
+                        Sort.Direction.ASC : Sort.Direction.DESC,
+                filter.getSortBy()
+        );
+
+        // Создаем объект пагинации с сортировкой
+        PageRequest pageRequest = PageRequest.of(
+                filter.getPage(),
+                filter.getSize(),
+                sort
+        );
+
+        // Применяем фильтры и возвращаем результат
+        Page<Event> events = eventsService.findAll(
+                EventSpecification.withFilters(filter),
+                pageRequest
+        );
+
+        return ResponseEntity.ok(events);
     }
 
     @Operation(summary = "Получить все события с пагинацией")

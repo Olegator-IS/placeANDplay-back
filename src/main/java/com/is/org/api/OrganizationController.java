@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 @Api(tags = "Organization APIs", description = "APIs for organization management")
 @RestController
 @SecurityRequirement(name = "bearerAuth")
-@RequestMapping("/api/organizations")
+@RequestMapping("/api/auth/organizations")
 @RequiredArgsConstructor
 public class OrganizationController {
 
