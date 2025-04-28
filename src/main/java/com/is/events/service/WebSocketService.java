@@ -1,26 +1,30 @@
 package com.is.events.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class WebSocketService {
 
-    private final SimpMessagingTemplate messagingTemplate;
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     public void notifyEventUpdate(Long placeId) {
-        try {
-            String destination = String.format("/topic/events/%d", placeId);
-            messagingTemplate.convertAndSend(destination, new EventUpdateMessage(placeId));
-            log.debug("Sent WebSocket notification to {}", destination);
-        } catch (Exception e) {
-            log.error("Failed to send WebSocket notification for placeId {}: {}", placeId, e.getMessage());
-            throw e;
-        }
+        log.info("Sending WebSocket notification for place {}", placeId);
+        messagingTemplate.convertAndSend("/topic/place/" + placeId, "update");
+    }
+
+    public void sendEventUpdate(Object payload) {
+        log.debug("Sending event update: {}", payload);
+        messagingTemplate.convertAndSend("/topic/events", payload);
+    }
+
+    public void sendPlaceUpdate(Object payload) {
+        log.debug("Sending place update: {}", payload);
+        messagingTemplate.convertAndSend("/topic/places", payload);
     }
 }
 

@@ -54,5 +54,7 @@ public class Event {
 
     @Column(name = "skill_level", length = 20)
     private String skillLevel;
+
+    private boolean isFirstTimeEventCreation;
 }
 

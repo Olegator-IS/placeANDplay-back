@@ -7,8 +7,11 @@ import com.is.events.exception.EventNotFoundException;
 import com.is.events.exception.EventValidationException;
 import com.is.events.model.CurrentParticipants;
 import com.is.events.model.Event;
+import com.is.events.model.UserActivityTracking;
 import com.is.events.model.enums.EventStatus;
 import com.is.events.repository.EventsRepository;
+import com.is.events.repository.UserActivityTrackingRepository;
+import com.is.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,9 +33,11 @@ import java.util.ArrayList;
 public class EventsService {
 
     private final EventsRepository eventsRepository;
+    private final UserActivityTrackingRepository userActivityTrackingRepository;
     private final LocalizationService localizationService;
     private final UserProfileService userProfileService;
     private final WebSocketService webSocketService;
+    private final UserRepository userRepository;
 
 //    @Autowired
 //    private Logger logger;
@@ -59,6 +64,14 @@ public class EventsService {
         dto.setDateTime(event.getDateTime());
         dto.setStatus(event.getStatus());
         dto.setPlaceId(event.getPlaceId());
+        
+        // Проверяем, есть ли запись об активности пользователя
+        if (event.getOrganizerEvent() != null) {
+            UserActivityTracking userActivity = userActivityTrackingRepository
+                    .findByUserId(event.getOrganizerEvent().getOrganizerId())
+                    .orElse(null);
+            dto.setFirstEventCreation(userActivity != null && userActivity.isFirstEventCreation());
+        }
         
         // Конвертация организатора
         if (event.getOrganizerEvent() != null) {
@@ -122,12 +135,37 @@ public class EventsService {
     @Transactional
     public EventDTO addEvent(Event event, String lang) {
         validateEventDate(event.getDateTime(), lang);
-        // Устанавливаем начальный статус OPEN для нового события
         event.setStatus(EventStatus.OPEN.name());
         log.info("Creating new event: {}", event);
+        
+        Long organizerId = event.getOrganizerEvent().getOrganizerId();
+        if (!userRepository.existsById(organizerId)) {
+            throw new EventValidationException("user_not_found", 
+                returnTextToUserByLang(lang, "user_not_found"));
+        }
+        
+        boolean isFirstEventCreation = !userActivityTrackingRepository.existsByUserId(organizerId);
+        
+        if (isFirstEventCreation) {
+            UserActivityTracking userActivity = new UserActivityTracking();
+            userActivity.setUserId(organizerId);
+            userActivity.setFirstEventCreation(true);
+            userActivity.setCreatedAt(LocalDateTime.now());
+            userActivity.setUpdatedAt(LocalDateTime.now());
+            userActivityTrackingRepository.save(userActivity);
+            log.info("Created first event tracking for user {}", organizerId);
+        }
+        
+        event.setFirstTimeEventCreation(isFirstEventCreation);
         Event savedEvent = eventsRepository.save(event);
+        
+        // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
-        return convertToDTO(savedEvent);
+        webSocketService.sendEventUpdate(convertToDTO(savedEvent));
+        
+        EventDTO resultDto = convertToDTO(savedEvent);
+        resultDto.setFirstEventCreation(isFirstEventCreation);
+        return resultDto;
     }
 
     @Transactional
@@ -148,14 +186,13 @@ public class EventsService {
             log.info("Current participants state: {}", event.getCurrentParticipants());
             Event updatedEvent = eventsRepository.save(event);
             
-            try {
-                webSocketService.notifyEventUpdate(event.getPlaceId());
-            } catch (Exception e) {
-                log.error("Failed to send WebSocket notification for event {}: {}", eventId, e.getMessage());
-            }
+            // Отправляем уведомление через WebSocket
+            webSocketService.notifyEventUpdate(event.getPlaceId());
+            webSocketService.sendEventUpdate(convertToDTO(updatedEvent));
             
             log.info("Successfully added participant to event: {}", eventId);
             return convertToDTO(updatedEvent);
+            
         } catch (Exception e) {
             log.error("Error while adding participant to event: {}", eventId, e);
             throw new RuntimeException("Error while adding participant: " + e.getMessage());
@@ -184,11 +221,9 @@ public class EventsService {
         log.info("Event {} status changed to {} by organizer {}", eventId, newStatus, userId);
         Event savedEvent = eventsRepository.save(event);
         
-        try {
-            webSocketService.notifyEventUpdate(event.getPlaceId());
-        } catch (Exception e) {
-            log.error("Failed to send WebSocket notification for event status change {}: {}", eventId, e.getMessage());
-        }
+        // Отправляем уведомление через WebSocket
+        webSocketService.notifyEventUpdate(event.getPlaceId());
+        webSocketService.sendEventUpdate(convertToDTO(savedEvent));
         
         return savedEvent;
     }
@@ -239,11 +274,9 @@ public class EventsService {
             
             Event updatedEvent = eventsRepository.save(event);
             
-            try {
-                webSocketService.notifyEventUpdate(event.getPlaceId());
-            } catch (Exception e) {
-                log.error("Failed to send WebSocket notification for participant leaving event {}: {}", eventId, e.getMessage());
-            }
+            // Отправляем уведомление через WebSocket
+            webSocketService.notifyEventUpdate(event.getPlaceId());
+            webSocketService.sendEventUpdate(convertToDTO(updatedEvent));
             
             log.info("Successfully removed participant from event: {}", eventId);
             return convertToDTO(updatedEvent);
@@ -268,8 +301,6 @@ public class EventsService {
             throw new EventValidationException("date_past_error",
                     returnTextToUserByLang(lang, "date_past_error"));
         }
-
-
     }
 
     private void validateEventJoinability(Event event, Long userId, String lang) {
@@ -389,6 +420,10 @@ public class EventsService {
             case "ru_organizer_must_cancel_first" -> "Организатор должен сначала отменить событие, прежде чем выйти из него!";
             case "uz_organizer_must_cancel_first" -> "Tashkilotchi avval tadbirni bekor qilishi kerak, keyin undan chiqishi mumkin!";
             case "en_organizer_must_cancel_first" -> "The organizer must cancel the event first before leaving it!";
+
+            case "ru_user_not_found" -> "Пользователь не найден в системе!";
+            case "uz_user_not_found" -> "Foydalanuvchi tizimda topilmadi!";
+            case "en_user_not_found" -> "User not found in the system!";
 
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };

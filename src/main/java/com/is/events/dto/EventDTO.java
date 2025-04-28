@@ -23,6 +23,7 @@ public class EventDTO {
     private String eventType;
     private String location;
     private Double price;
+    private boolean isFirstEventCreation;
     
     public void addParticipant(ParticipantDTO participant) {
         if (this.participants == null) {

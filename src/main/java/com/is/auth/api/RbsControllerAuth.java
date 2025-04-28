@@ -47,13 +47,13 @@ public class RbsControllerAuth {
         this.webSocketService = webSocketService;
     }
 
-    public void notifyEventUpdate(Long placeId) {
-        try {
-            webSocketService.notifyEventUpdate(placeId);
-        } catch (Exception e) {
-            log.error("Error sending WebSocket notification", e);
-        }
-    }
+//    public void notifyEventUpdate(Long placeId) {
+//        try {
+//            webSocketService.notifyEventUpdate(placeId);
+//        } catch (Exception e) {
+//            log.error("Error sending WebSocket notification", e);
+//        }
+//    }
 
     // Этот метод вызывается при подключении клиента
     @EventListener

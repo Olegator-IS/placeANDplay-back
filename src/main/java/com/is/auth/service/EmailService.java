@@ -164,4 +164,82 @@ public class EmailService {
                     texts.get(prefix + "_footer")
             );
         }
+
+    public ResponseEntity<?> sendWelcomeEmail(String email, String lang) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+            Map<String, String> welcomeTexts = Map.ofEntries(
+                    new AbstractMap.SimpleEntry<>("ru_subject", "Place&Play - Добро пожаловать!"),
+                    new AbstractMap.SimpleEntry<>("en_subject", "Place&Play - Welcome!"),
+                    new AbstractMap.SimpleEntry<>("uz_subject", "Place&Play - Xush kelibsiz!"),
+
+                    new AbstractMap.SimpleEntry<>("ru_body", """
+                        Добро пожаловать в Place&Play! Мы очень рады, что вы присоединились к нам! 
+                        Здесь вы сможете находить единомышленников, организовывать спортивные мероприятия и просто весело проводить время.
+                        Откройте для себя новые возможности и наслаждайтесь игрой вместе с нами!
+                        """),
+                    new AbstractMap.SimpleEntry<>("en_body", """
+                        Welcome to Place&Play! We're thrilled to have you with us! 
+                        Here you can find like-minded people, organize sports events, and simply enjoy your time.
+                        Discover new opportunities and enjoy playing with us!
+                        """),
+                    new AbstractMap.SimpleEntry<>("uz_body", """
+                        Place&Play'ga xush kelibsiz! Biz sizning bizga qo'shilganingizdan juda xursandmiz!
+                        Bu yerda siz hamfikrlar topishingiz, sport tadbirlarini tashkil qilishingiz va yaxshi vaqt o'tkazishingiz mumkin.
+                        Yangi imkoniyatlarni kashf qiling va biz bilan birga zavqlaning!
+                        """)
+            );
+
+            String langPrefix = welcomeTexts.containsKey(lang + "_subject") ? lang : "ru";
+
+            helper.setFrom("welcome@placeandplay.uz");
+            helper.setTo(email);
+            helper.setSubject(welcomeTexts.get(langPrefix + "_subject"));
+            helper.setText(getWelcomeContent(welcomeTexts.get(langPrefix + "_body")), true);
+
+            mailSender.send(message);
+
+            return ResponseEntity.ok().build();
+        } catch (MessagingException e) {
+            log.error("Ошибка при отправке приветственного письма на email: {}", email, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Ошибка при отправке приветственного письма.");
+        } catch (Exception e) {
+            log.error("Неизвестная ошибка при отправке приветственного письма: {}", email, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Произошла непредвиденная ошибка.");
+        }
+    }
+
+    private String getWelcomeContent(String bodyText) {
+        return String.format("""
+    <html>
+    <head>
+        <style>
+            body { font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px; }
+            .container { max-width: 600px; background: white; padding: 30px; border-radius: 10px; text-align: center; }
+            h1 { color: #4CAF50; }
+            p { font-size: 16px; color: #555; margin-top: 20px; }
+            .logo { max-width: 100%%; margin-top: 20px; border-radius: 8px; }
+            .footer { font-size: 12px; color: #888; margin-top: 30px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Добро пожаловать в Place&Play!</h1>
+            <p>%s</p>
+            <div class="footer">
+                Это автоматическое сообщение. Пожалуйста, не отвечайте на него.<br>
+                С уважением, команда Place&Play.
+            </div>
+        </div>
+    </body>
+    </html>
+    """, bodyText);
+    }
+
+
+
 }

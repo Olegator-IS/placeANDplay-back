@@ -15,7 +15,7 @@ import java.util.List;
 
 @Repository
 public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecificationExecutor<Event> {
-    
+
     Event findEventByEventId(Long eventId);
     
     Page<Event> findAllByPlaceId(Long placeId, Pageable pageable);
@@ -60,3 +60,4 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             """, nativeQuery = true)
     List<Event> findAllActivityByUser(Long userId);
 }
+

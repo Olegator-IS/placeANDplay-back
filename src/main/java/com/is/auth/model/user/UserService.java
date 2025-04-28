@@ -12,6 +12,7 @@ import com.is.auth.model.logger.Logger;
 import com.is.auth.model.sports.SkillsDTO;
 import com.is.auth.model.sports.SportsDTO;
 import com.is.auth.repository.*;
+import com.is.auth.service.EmailService;
 import com.is.auth.service.RequestLogger;
 import com.is.auth.service.FileStorageService;
 import io.jsonwebtoken.Claims;
@@ -57,12 +58,14 @@ public class UserService {
     private final ListOfCitiesRepository listOfCitiesRepository;
     private final ListOfCountriesRepository listOfCountriesRepository;
     private final FileStorageService fileStorageService;
+    private final EmailService emailService;
 
     @Autowired
     private Logger logger;
 
     @Value("${app.upload.dir:${user.home}/uploads}")
     private String uploadDir;
+
 
     public UserService(SecretKey secretKey,
                       JwtAuthenticationFilter jwtAuthenticationFilter,
@@ -75,7 +78,8 @@ public class UserService {
                       ListOfSkillsRepository listOfSkillsRepository,
                       ListOfCitiesRepository listOfCitiesRepository,
                       ListOfCountriesRepository listOfCountriesRepository,
-                      FileStorageService fileStorageService) {
+                      FileStorageService fileStorageService,
+                      EmailService emailService) {
         this.secretKey = secretKey;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.requestLogger = requestLogger;
@@ -88,6 +92,7 @@ public class UserService {
         this.listOfCitiesRepository = listOfCitiesRepository;
         this.listOfCountriesRepository = listOfCountriesRepository;
         this.fileStorageService = fileStorageService;
+        this.emailService = emailService;
     }
 
     private User createNewUser(String email, String password, String firstName, String lastName) {
@@ -134,6 +139,8 @@ public class UserService {
             Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
             requestLogger.logRequest(HttpStatus.CREATED, currentTime, method, url, requestId, clientIp, executionTime,
                     registrationRequest, response);
+            emailService.sendWelcomeEmail(user.getEmail(),language);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (UserAlreadyExistsException e) {
