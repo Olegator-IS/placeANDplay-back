@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Api(tags = "Available APIs for the PLACE", description = "List of methods for interacting with PLACE")
@@ -33,7 +34,7 @@ public class PlaceController {
 
         List<Place> places;
         if (sportId == null || sportId.isEmpty()) {
-            places = placeService.getAllPlaces(currentCity);
+            places = new ArrayList<>();
         } else {
             places = placeService.getAllPlacesBySport(currentCity, sportId);
         }

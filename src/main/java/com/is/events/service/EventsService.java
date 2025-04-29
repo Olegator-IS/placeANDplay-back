@@ -80,6 +80,8 @@ public class EventsService {
             organizerDTO.setName(event.getOrganizerEvent().getOrganizerName());
             organizerDTO.setEmail(event.getOrganizerEvent().getEmail());
             organizerDTO.setPhoneNumber(event.getOrganizerEvent().getPhoneNumber());
+            organizerDTO.setOrganizationType("INDIVIDUAL");
+            organizerDTO.setRating(4.8);
             
             // Добавляем URL профильного изображения организатора
             try {
