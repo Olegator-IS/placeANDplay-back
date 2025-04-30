@@ -26,7 +26,10 @@ import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import javax.mail.MessagingException;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Api(tags = "Available APIs for the IDP", description = "List of methods for interacting with IDP")
 @RestController
@@ -114,7 +117,7 @@ public class RbsControllerAuth {
         return userService.refreshToken(refreshToken,language);
     }
 
-    @PatchMapping("/registrationAddInfo")
+    @PostMapping("/registrationAddInfo")
     public ResponseEntity<?> registrationAddInfo(  @RequestAttribute("clientIp") String clientIp,
                                                    @RequestAttribute("url") String url,
                                                    @RequestAttribute("method") String method,
@@ -128,6 +131,38 @@ public class RbsControllerAuth {
         long currentTime = System.currentTimeMillis(); // Это необходимо для время выполнения запроса
         long executionTime = currentTime - startTime; // Время выполнения запроса
         return userService.registrationAddInfo(clientIp,url,method,requestId,currentTime,executionTime,language,registrationAddInfoRequest);
+    }
+
+    @PatchMapping("/updateAddInfo")
+    @ApiOperation(value = "Update user additional information", notes = "Update existing user's additional information")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Successfully updated user information"),
+        @ApiResponse(code = 401, message = "Unauthorized - Invalid token"),
+        @ApiResponse(code = 404, message = "User not found"),
+        @ApiResponse(code = 400, message = "Invalid request data")
+    })
+    public ResponseEntity<?> updateAddInfo(  
+                                   @RequestAttribute("clientIp") String clientIp,
+                                   @RequestAttribute("url") String url,
+                                   @RequestAttribute("method") String method,
+                                   @RequestAttribute("Request-Id") String requestId,
+                                   @RequestAttribute("startTime") long startTime,
+                                   @RequestHeader(value = "language", required = true) String language,
+                                   @RequestHeader(required = true) String accessToken,
+                                   @RequestHeader(required = true) String refreshToken,
+                                   @RequestBody RegistrationAddInfoRequest registrationAddInfoRequest) {
+        validateLanguage(language);
+        
+        // First validate tokens
+        ResponseEntity<?> tokenValidation = userService.validateTokenAndGetSubject(accessToken, refreshToken, language);
+        if (tokenValidation.getStatusCode() != HttpStatus.OK) {
+            return tokenValidation;
+        }
+        
+        long currentTime = System.currentTimeMillis();
+        long executionTime = currentTime - startTime;
+        
+        return userService.updateAddInfo(clientIp, url, method, requestId, currentTime, executionTime, language, registrationAddInfoRequest);
     }
 
     @GetMapping("/getListOfSports")
@@ -249,6 +284,39 @@ public class RbsControllerAuth {
             @RequestParam("userId") Long userId,
             @RequestHeader(value = "language", defaultValue = "ru") String language) {
         return userService.uploadProfilePicture(file, userId);
+    }
+
+    @GetMapping("/health")
+    @ApiOperation(value = "Check system health", notes = "Returns system health status")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "System is healthy"),
+        @ApiResponse(code = 503, message = "System is unhealthy")
+    })
+    public ResponseEntity<Map<String, Object>> healthCheck() {
+        Map<String, Object> healthStatus = new HashMap<>();
+        try {
+            // Проверяем подключение к БД через простой запрос
+            long userCount = userService.getUserRepository().count();
+            
+            healthStatus.put("status", "UP");
+            healthStatus.put("timestamp", LocalDateTime.now());
+            healthStatus.put("database", "UP");
+            healthStatus.put("service", "auth-service");
+            healthStatus.put("version", "1.0");
+            healthStatus.put("userCount", userCount);
+            
+            return ResponseEntity.ok(healthStatus);
+        } catch (Exception e) {
+            log.error("Health check failed", e);
+            healthStatus.put("status", "DOWN");
+            healthStatus.put("timestamp", LocalDateTime.now());
+            healthStatus.put("database", "DOWN");
+            healthStatus.put("service", "auth-service");
+            healthStatus.put("version", "1.0");
+            healthStatus.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(healthStatus);
+        }
     }
 
     private void validateLanguage(String language) {

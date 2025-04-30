@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
 import java.io.File;
@@ -334,24 +335,95 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Response> registrationAddInfo(String clientIp,String url,String method,String requestId,
-                                                        long currentTime,long executionTime,String language,
-                                                        RegistrationAddInfoRequest registrationAddInfoRequest) {
+    private UserAdditionalInfo updateUserInfo(long userId, String hobbies, List<FavoriteSport> favoriteSportList,
+                                           int currentLocationCityId, int currentLocationCountryId, String bio, 
+                                           String profilePictureUrl) {
+        Optional<UserAdditionalInfo> existingInfo = userAdditionalInfoRepository.findById(userId);
+        UserAdditionalInfo userAddInfo;
+        
+        if (existingInfo.isPresent()) {
+            userAddInfo = existingInfo.get();
+            log.info("Updating existing user additional info for userId: {}", userId);
+        } else {
+            log.info("Creating new user additional info for userId: {}", userId);
+            userAddInfo = new UserAdditionalInfo();
+            userAddInfo.setUserId(userId);
+        }
+        
+        // Update fields
+        if (hobbies != null) {
+            userAddInfo.setHobbies(hobbies);
+        }
+        
+        // Обновляем список видов спорта
+        if (favoriteSportList != null) {
+            log.info("Updating favorite sports for userId: {}. New sports list: {}", userId, favoriteSportList);
+            // Конвертируем список спортов в JSON строку
+            String sportsJson = FavoriteSport.toJson(favoriteSportList);
+            userAddInfo.setFavoriteSports(sportsJson);
+            userAddInfo.setFavoriteSportObjects(favoriteSportList);
+        }
+        
+        if (currentLocationCityId > 0) {
+            userAddInfo.setCurrentLocationCityId(currentLocationCityId);
+        }
+        if (currentLocationCountryId > 0) {
+            userAddInfo.setCurrentLocationCountryId(currentLocationCountryId);
+        }
+        if (bio != null) {
+            userAddInfo.setBio(bio);
+        }
+        if (profilePictureUrl != null) {
+            userAddInfo.setProfilePictureUrl(profilePictureUrl);
+        }
+
+        log.info("Saving user additional info. FavoriteSports JSON: {}", userAddInfo.getFavoriteSports());
+        return userAdditionalInfoRepository.save(userAddInfo);
+    }
+
+    @Transactional
+    public ResponseEntity<Response> updateAddInfo(String clientIp, String url, String method, String requestId,
+                                                long currentTime, long executionTime, String language,
+                                                RegistrationAddInfoRequest registrationAddInfoRequest) {
         try {
+            // Validate that user exists
+            if (!userAdditionalInfoRepository.existsById(registrationAddInfoRequest.getUserId())) {
+                Response response = new Response(HttpStatus.NOT_FOUND.value(), "USER_NOT_FOUND",
+                        "User with id " + registrationAddInfoRequest.getUserId() + " not found");
+                logger.logRequestDetails(HttpStatus.NOT_FOUND, currentTime, method, url, requestId, clientIp, executionTime,
+                        registrationAddInfoRequest, response);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
 
-            UserAdditionalInfo user = registerUser(registrationAddInfoRequest.getUserId(),
-                    registrationAddInfoRequest.getHobbies(),registrationAddInfoRequest.getFavoriteSports(),
-                    registrationAddInfoRequest.getCurrentLocationCityId(),registrationAddInfoRequest.getCurrentLocationCountryId(),
-                    registrationAddInfoRequest.getBio(),registrationAddInfoRequest.getProfilePictureUrl());
+            log.info("Processing update request for userId: {}. Favorite sports: {}", 
+                    registrationAddInfoRequest.getUserId(),
+                    registrationAddInfoRequest.getFavoriteSports());
+            
+            UserAdditionalInfo updatedUser = updateUserInfo(
+                    registrationAddInfoRequest.getUserId(),
+                    registrationAddInfoRequest.getHobbies(),
+                    registrationAddInfoRequest.getFavoriteSports(),
+                    registrationAddInfoRequest.getCurrentLocationCityId(),
+                    registrationAddInfoRequest.getCurrentLocationCountryId(),
+                    registrationAddInfoRequest.getBio(),
+                    registrationAddInfoRequest.getProfilePictureUrl()
+            );
 
-            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
-            logger.logRequestDetails(HttpStatus.CREATED,currentTime,method,url,requestId,clientIp,executionTime,registrationAddInfoRequest,response);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            log.info("Successfully updated user info for userId: {}. New favorite sports: {}", 
+                    updatedUser.getUserId(), 
+                    updatedUser.getFavoriteSports());
+            
+            Response response = new Response(HttpStatus.OK.value(), "USER_UPDATED_SUCCESSFULLY", updatedUser.getUserId());
+            logger.logRequestDetails(HttpStatus.OK, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, response);
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "SOMETHING_WRONG",
-                    "Error during processing, try again");
-            logger.logRequestDetails(HttpStatus.BAD_REQUEST,currentTime,method,url,requestId,clientIp,executionTime,registrationAddInfoRequest,e);
+            log.error("Error updating user additional info for userId: " + registrationAddInfoRequest.getUserId(), e);
+            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "UPDATE_ERROR",
+                    "Error during update: " + e.getMessage());
+            logger.logRequestDetails(HttpStatus.BAD_REQUEST, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
@@ -419,6 +491,34 @@ public class UserService {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new Response(500, "UPLOAD_ERROR", "Error uploading file"));
         }
+    }
+
+    public ResponseEntity<Response> registrationAddInfo(String clientIp, String url, String method, String requestId,
+                                                      long currentTime, long executionTime, String language,
+                                                      RegistrationAddInfoRequest registrationAddInfoRequest) {
+        try {
+            UserAdditionalInfo user = registerUser(registrationAddInfoRequest.getUserId(),
+                    registrationAddInfoRequest.getHobbies(), registrationAddInfoRequest.getFavoriteSports(),
+                    registrationAddInfoRequest.getCurrentLocationCityId(), registrationAddInfoRequest.getCurrentLocationCountryId(),
+                    registrationAddInfoRequest.getBio(), registrationAddInfoRequest.getProfilePictureUrl());
+
+            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
+            logger.logRequestDetails(HttpStatus.CREATED, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        } catch (Exception e) {
+            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "REGISTRATION_ERROR",
+                    "Error during registration: " + e.getMessage());
+            logger.logRequestDetails(HttpStatus.BAD_REQUEST, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    // Getter for userRepository
+    public UserRepository getUserRepository() {
+        return userRepository;
     }
 }
 
