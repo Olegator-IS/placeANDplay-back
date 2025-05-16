@@ -2,6 +2,8 @@ package com.is.places.api;
 
 import com.is.places.model.Place;
 import com.is.places.service.PlaceService;
+import com.is.org.service.OrganizationService;
+import com.is.org.model.Organizations;
 import io.swagger.annotations.Api;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 @Api(tags = "Available APIs for the PLACE", description = "List of methods for interacting with PLACE")
 
@@ -18,10 +22,12 @@ import java.util.List;
 @Slf4j
 public class PlaceController {
     private final PlaceService placeService;
+    private final OrganizationService organizationService;
 
     @Autowired
-    public PlaceController(PlaceService placeService) {
+    public PlaceController(PlaceService placeService, OrganizationService organizationService) {
         this.placeService = placeService;
+        this.organizationService = organizationService;
         log.info("PlaceController initialized!");
     }
 
@@ -57,11 +63,25 @@ public class PlaceController {
     }
 
     @GetMapping("/getPlace")
-    public ResponseEntity<Place> getPlace(@RequestParam long placeId,
-                                          @RequestHeader String accessToken,
-                                          @RequestHeader String refreshToken) {
-        Place places = placeService.getPlace(placeId);
-        return places==null ? ResponseEntity.noContent().build() : ResponseEntity.ok(places);
+    public ResponseEntity<?> getPlace(@RequestParam long placeId,
+                                    @RequestHeader String accessToken,
+                                    @RequestHeader String refreshToken) {
+        Place place = placeService.getPlace(placeId);
+        if (place == null) {
+            return ResponseEntity.noContent().build();
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("place", place);
+
+        if (place.getOrgId() != null) {
+            Organizations organization = organizationService.getOrganizationById(place.getOrgId());
+            if (organization != null) {
+                response.put("organization", organization);
+            }
+        }
+
+        return ResponseEntity.ok(response);
     }
 
 

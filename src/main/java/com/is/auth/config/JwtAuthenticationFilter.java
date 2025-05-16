@@ -20,8 +20,8 @@ import java.util.UUID;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-//    private static final String secretKey = "823a5b472e8540ae900c7471f3487b263103acf310fd27951s"; // Замените на ваш секретный ключ
-    private static final Key SECRET_KEY = Keys.secretKeyFor(SignatureAlgorithm.HS512);
+    private static final String SECRET_KEY_STRING = "823a5b472e8540ae900c7471f3487b263103acf310fd27951s";
+    private static final Key SECRET_KEY = Keys.hmacShaKeyFor(SECRET_KEY_STRING.getBytes());
 
 
     @Override
@@ -55,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     public static String generateToken(String username, Authentication authentication) {
         Date now = new Date();
-        Date expirationDate = new Date(now.getTime() + 120000); // Токен на 1 час
+        Date expirationDate = new Date(now.getTime() + 1200000); // Токен на 1 час
 //        System.out.println("Sau brat");
         try{
         return Jwts.builder()

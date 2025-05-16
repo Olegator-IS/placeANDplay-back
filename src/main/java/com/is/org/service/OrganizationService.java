@@ -225,4 +225,8 @@ public class OrganizationService {
         }
 
     }
+
+    public Organizations getOrganizationById(Long orgId) {
+        return organizationRepository.findById(orgId).orElse(null);
+    }
 }

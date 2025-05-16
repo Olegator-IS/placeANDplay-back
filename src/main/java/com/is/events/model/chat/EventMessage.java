@@ -1,13 +1,16 @@
-package com.is.events.model;
+package com.is.events.model.chat;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import javax.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity
+@Entity(name = "ChatEventMessage")
 @Table(name = "event_messages", schema = "events")
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -26,7 +29,7 @@ public class EventMessage {
     @Column(name = "sender_name", nullable = false)
     private String senderName;
 
-    @Column(name = "content", nullable = false, columnDefinition = "text")
+    @Column(name = "content", nullable = false)
     private String content;
 
     @Column(name = "sent_at", nullable = false)

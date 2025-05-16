@@ -1,6 +1,6 @@
 package com.is.events.service;
 
-import com.is.events.model.EventMessage;
+import com.is.events.model.chat.EventMessage;
 import com.is.events.repository.EventMessageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
