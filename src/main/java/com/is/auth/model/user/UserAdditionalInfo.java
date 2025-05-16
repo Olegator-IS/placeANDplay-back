@@ -1,7 +1,7 @@
 package com.is.auth.model.user;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.is.auth.config.JsonType;
+import com.vladmihalcea.hibernate.type.json.JsonType;
 import lombok.Data;
 import org.hibernate.annotations.Type;
 import org.hibernate.annotations.TypeDef;

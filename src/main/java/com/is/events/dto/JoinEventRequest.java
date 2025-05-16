@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 public class JoinEventRequest {
     @NotNull(message = "participantId is required")
     private Long participantId;
-    
+
     @NotBlank(message = "participantName is required")
     private String participantName;
 } 

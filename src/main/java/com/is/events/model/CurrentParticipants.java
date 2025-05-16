@@ -19,10 +19,10 @@ public class CurrentParticipants implements Serializable {
     public static class Participant implements Serializable {
         @JsonProperty("participantId")
         private Long participantId;
-        
+
         @JsonProperty("participantName")
         private String participantName;
-        
+
         @JsonProperty("status")
         private String status;
 

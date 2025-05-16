@@ -34,10 +34,10 @@ public class EventSpecification {
             // Фильтр по типу события
             if (filter.getEventType() != null && !filter.getEventType().isEmpty()) {
                 Expression<String> sportType = criteriaBuilder.function(
-                    "jsonb_extract_path_text",
-                    String.class,
-                    root.get("sportEvent"),
-                    criteriaBuilder.literal("sportType")
+                        "jsonb_extract_path_text",
+                        String.class,
+                        root.get("sportEvent"),
+                        criteriaBuilder.literal("sportType")
                 );
                 predicates.add(criteriaBuilder.equal(sportType, filter.getEventType()));
             }
@@ -45,51 +45,51 @@ public class EventSpecification {
             // Фильтр по цене
             if (filter.getPriceMin() != null) {
                 Expression<Double> price = criteriaBuilder.function(
-                    "jsonb_extract_path_text",
-                    Double.class,
-                    root.get("sportEvent"),
-                    criteriaBuilder.literal("price")
+                        "jsonb_extract_path_text",
+                        Double.class,
+                        root.get("sportEvent"),
+                        criteriaBuilder.literal("price")
                 );
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(
-                    criteriaBuilder.coalesce(price, 0.0),
-                    filter.getPriceMin()
+                        criteriaBuilder.coalesce(price, 0.0),
+                        filter.getPriceMin()
                 ));
             }
             if (filter.getPriceMax() != null) {
                 Expression<Double> price = criteriaBuilder.function(
-                    "jsonb_extract_path_text",
-                    Double.class,
-                    root.get("sportEvent"),
-                    criteriaBuilder.literal("price")
+                        "jsonb_extract_path_text",
+                        Double.class,
+                        root.get("sportEvent"),
+                        criteriaBuilder.literal("price")
                 );
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(
-                    criteriaBuilder.coalesce(price, Double.MAX_VALUE),
-                    filter.getPriceMax()
+                        criteriaBuilder.coalesce(price, Double.MAX_VALUE),
+                        filter.getPriceMax()
                 ));
             }
 
             // Фильтр по количеству свободных мест
             if (filter.getAvailableSpots() != null) {
                 Expression<Integer> maxParticipants = criteriaBuilder.function(
-                    "jsonb_extract_path_text",
-                    Integer.class,
-                    root.get("sportEvent"),
-                    criteriaBuilder.literal("maxParticipants")
+                        "jsonb_extract_path_text",
+                        Integer.class,
+                        root.get("sportEvent"),
+                        criteriaBuilder.literal("maxParticipants")
                 );
                 Expression<Integer> currentSize = criteriaBuilder.function(
-                    "jsonb_extract_path_text",
-                    Integer.class,
-                    root.get("currentParticipants"),
-                    criteriaBuilder.literal("size")
+                        "jsonb_extract_path_text",
+                        Integer.class,
+                        root.get("currentParticipants"),
+                        criteriaBuilder.literal("size")
                 );
                 predicates.add(
-                    criteriaBuilder.greaterThanOrEqualTo(
-                        criteriaBuilder.diff(
-                            criteriaBuilder.coalesce(maxParticipants, 0),
-                            criteriaBuilder.coalesce(currentSize, 0)
-                        ),
-                        filter.getAvailableSpots()
-                    )
+                        criteriaBuilder.greaterThanOrEqualTo(
+                                criteriaBuilder.diff(
+                                        criteriaBuilder.coalesce(maxParticipants, 0),
+                                        criteriaBuilder.coalesce(currentSize, 0)
+                                ),
+                                filter.getAvailableSpots()
+                        )
                 );
             }
 
@@ -97,16 +97,16 @@ public class EventSpecification {
             if (filter.getSearch() != null && !filter.getSearch().isEmpty()) {
                 String searchPattern = "%" + filter.getSearch().toLowerCase() + "%";
                 Expression<String> title = criteriaBuilder.function(
-                    "jsonb_extract_path_text",
-                    String.class,
-                    root.get("sportEvent"),
-                    criteriaBuilder.literal("title")
+                        "jsonb_extract_path_text",
+                        String.class,
+                        root.get("sportEvent"),
+                        criteriaBuilder.literal("title")
                 );
                 predicates.add(
-                    criteriaBuilder.or(
-                        criteriaBuilder.like(criteriaBuilder.lower(title), searchPattern),
-                        criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), searchPattern)
-                    )
+                        criteriaBuilder.or(
+                                criteriaBuilder.like(criteriaBuilder.lower(title), searchPattern),
+                                criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), searchPattern)
+                        )
                 );
             }
 

@@ -64,7 +64,7 @@ public class EventsService {
         dto.setDateTime(event.getDateTime());
         dto.setStatus(event.getStatus());
         dto.setPlaceId(event.getPlaceId());
-        
+
         // Проверяем, есть ли запись об активности пользователя
         if (event.getOrganizerEvent() != null) {
             UserActivityTracking userActivity = userActivityTrackingRepository
@@ -72,7 +72,7 @@ public class EventsService {
                     .orElse(null);
             dto.setFirstEventCreation(userActivity != null && userActivity.isFirstEventCreation());
         }
-        
+
         // Конвертация организатора
         if (event.getOrganizerEvent() != null) {
             OrganizerDTO organizerDTO = new OrganizerDTO();
@@ -82,7 +82,7 @@ public class EventsService {
             organizerDTO.setPhoneNumber(event.getOrganizerEvent().getPhoneNumber());
             organizerDTO.setOrganizationType("INDIVIDUAL");
             organizerDTO.setRating(4.8);
-            
+
             // Добавляем URL профильного изображения организатора
             try {
                 String profilePictureUrl = userProfileService.getProfilePictureUrl(event.getOrganizerEvent().getOrganizerId());
@@ -90,35 +90,35 @@ public class EventsService {
             } catch (Exception e) {
                 log.warn("Could not fetch profile picture for organizer {}", event.getOrganizerEvent().getOrganizerId());
             }
-            
+
             dto.setOrganizer(organizerDTO);
         }
-        
+
         // Конвертация участников
         if (event.getCurrentParticipants() != null) {
             List<ParticipantDTO> participantDTOs = event.getCurrentParticipants().getParticipants().stream()
-                .map(participant -> {
-                    String profilePictureUrl = null;
-                    try {
-                        profilePictureUrl = userProfileService.getProfilePictureUrl(participant.getParticipantId());
-                    } catch (Exception e) {
-                        log.warn("Could not fetch profile picture for participant {}", participant.getParticipantId());
-                    }
-                    return new ParticipantDTO(
-                        participant.getParticipantId(),
-                        participant.getParticipantName(),
-                        participant.getJoinedAt(),
-                        profilePictureUrl
-                    );
-                })
-                .toList();
+                    .map(participant -> {
+                        String profilePictureUrl = null;
+                        try {
+                            profilePictureUrl = userProfileService.getProfilePictureUrl(participant.getParticipantId());
+                        } catch (Exception e) {
+                            log.warn("Could not fetch profile picture for participant {}", participant.getParticipantId());
+                        }
+                        return new ParticipantDTO(
+                                participant.getParticipantId(),
+                                participant.getParticipantName(),
+                                participant.getJoinedAt(),
+                                profilePictureUrl
+                        );
+                    })
+                    .toList();
             dto.setParticipants(participantDTOs);
             dto.setParticipantsCount(event.getCurrentParticipants().getSize());
         } else {
             dto.setParticipants(new ArrayList<>());
             dto.setParticipantsCount(0);
         }
-        
+
         // Установка дополнительных полей
         dto.setJoinable(EventStatus.OPEN.name().equals(event.getStatus()));
         dto.setMaxParticipants(event.getSportEvent().getMaxParticipants());
@@ -139,15 +139,15 @@ public class EventsService {
         validateEventDate(event.getDateTime(), lang);
         event.setStatus(EventStatus.OPEN.name());
         log.info("Creating new event: {}", event);
-        
+
         Long organizerId = event.getOrganizerEvent().getOrganizerId();
         if (!userRepository.existsById(organizerId)) {
-            throw new EventValidationException("user_not_found", 
-                returnTextToUserByLang(lang, "user_not_found"));
+            throw new EventValidationException("user_not_found",
+                    returnTextToUserByLang(lang, "user_not_found"));
         }
-        
+
         boolean isFirstEventCreation = !userActivityTrackingRepository.existsByUserId(organizerId);
-        
+
         if (isFirstEventCreation) {
             UserActivityTracking userActivity = new UserActivityTracking();
             userActivity.setUserId(organizerId);
@@ -157,14 +157,14 @@ public class EventsService {
             userActivityTrackingRepository.save(userActivity);
             log.info("Created first event tracking for user {}", organizerId);
         }
-        
+
         event.setFirstTimeEventCreation(isFirstEventCreation);
         Event savedEvent = eventsRepository.save(event);
-        
+
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
-        
+
         EventDTO resultDto = convertToDTO(savedEvent);
         resultDto.setFirstEventCreation(isFirstEventCreation);
         return resultDto;
@@ -174,27 +174,27 @@ public class EventsService {
     public EventDTO joinEvent(Long eventId, Long userId, String userName, String lang) {
         Event event = findAndValidateEvent(eventId, lang);
         validateEventJoinability(event, userId, lang);
-        
+
         try {
             log.info("Adding participant userId: {}, userName: {} to event: {}", userId, userName, eventId);
-            
+
             if (event.getCurrentParticipants() == null) {
                 event.setCurrentParticipants(new CurrentParticipants());
             }
-            
+
             event.getCurrentParticipants().addParticipant(userId, userName);
             event.getCurrentParticipants().setSize(event.getCurrentParticipants().getParticipants().size());
-            
+
             log.info("Current participants state: {}", event.getCurrentParticipants());
             Event updatedEvent = eventsRepository.save(event);
-            
+
             // Отправляем уведомление через WebSocket
             webSocketService.notifyEventUpdate(event.getPlaceId());
             webSocketService.sendEventUpdate(convertToDTO(updatedEvent));
-            
+
             log.info("Successfully added participant to event: {}", eventId);
             return convertToDTO(updatedEvent);
-            
+
         } catch (Exception e) {
             log.error("Error while adding participant to event: {}", eventId, e);
             throw new RuntimeException("Error while adding participant: " + e.getMessage());
@@ -210,23 +210,23 @@ public class EventsService {
     public Event eventAction(Long eventId, Long userId, String action, String lang) {
         Event event = findAndValidateEvent(eventId, lang);
         validateEventOrganizer(event, userId, lang);
-        
+
         EventStatus newStatus = validateAndGetEventStatus(action, lang);
         EventStatus currentStatus = EventStatus.valueOf(event.getStatus().toUpperCase());
-        
+
         if (!currentStatus.canTransitionTo(newStatus)) {
-            throw new EventValidationException("status_transition_error", 
-                String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+            throw new EventValidationException("status_transition_error",
+                    String.format("Cannot transition from %s to %s", currentStatus, newStatus));
         }
 
         event.setStatus(newStatus.name());
         log.info("Event {} status changed to {} by organizer {}", eventId, newStatus, userId);
         Event savedEvent = eventsRepository.save(event);
-        
+
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
-        
+
         return savedEvent;
     }
 
@@ -236,20 +236,20 @@ public class EventsService {
             log.info("Processing events for today: {}", today);
             List<Event> events = eventsRepository.findOpenEventsForToday(today);
             LocalDateTime now = LocalDateTime.now();
-            
+
             events.stream()
-                .filter(event -> event.getDateTime() != null && event.getDateTime().isBefore(now))
-                .forEach(event -> {
-                    try {
-                        log.info("Marking event {} as EXPIRED because its datetime {} is before now {}", 
-                            event.getEventId(), event.getDateTime(), now);
-                        event.setStatus(EventStatus.EXPIRED.name());
-                        eventsRepository.save(event);
-                    } catch (Exception e) {
-                        log.error("Error updating event {} status to EXPIRED", event.getEventId(), e);
-                    }
-                });
-            
+                    .filter(event -> event.getDateTime() != null && event.getDateTime().isBefore(now))
+                    .forEach(event -> {
+                        try {
+                            log.info("Marking event {} as EXPIRED because its datetime {} is before now {}",
+                                    event.getEventId(), event.getDateTime(), now);
+                            event.setStatus(EventStatus.EXPIRED.name());
+                            eventsRepository.save(event);
+                        } catch (Exception e) {
+                            log.error("Error updating event {} status to EXPIRED", event.getEventId(), e);
+                        }
+                    });
+
             log.info("Finished processing {} events for today", events.size());
             return events;
         } catch (Exception e) {
@@ -262,24 +262,24 @@ public class EventsService {
     public EventDTO leaveEvent(Long eventId, Long participantId, String lang) {
         Event event = findAndValidateEvent(eventId, lang);
         validateEventLeaving(event, participantId, lang);
-        
+
         try {
             log.info("Removing participant {} from event {}", participantId, eventId);
-            
-            if (event.getCurrentParticipants() == null || 
-                !event.getCurrentParticipants().hasParticipant(participantId)) {
+
+            if (event.getCurrentParticipants() == null ||
+                    !event.getCurrentParticipants().hasParticipant(participantId)) {
                 throw new EventValidationException("not_participant",
-                    returnTextToUserByLang(lang, "not_participant"));
+                        returnTextToUserByLang(lang, "not_participant"));
             }
-            
+
             event.getCurrentParticipants().removeParticipant(participantId);
-            
+
             Event updatedEvent = eventsRepository.save(event);
-            
+
             // Отправляем уведомление через WebSocket
             webSocketService.notifyEventUpdate(event.getPlaceId());
             webSocketService.sendEventUpdate(convertToDTO(updatedEvent));
-            
+
             log.info("Successfully removed participant from event: {}", eventId);
             return convertToDTO(updatedEvent);
         } catch (EventValidationException e) {
@@ -307,39 +307,39 @@ public class EventsService {
 
     private void validateEventJoinability(Event event, Long userId, String lang) {
         if (!event.getStatus().equalsIgnoreCase(EventStatus.OPEN.name())) {
-            throw new EventValidationException("event_is_not_available", 
-                returnTextToUserByLang(lang, "event_is_not_available"));
+            throw new EventValidationException("event_is_not_available",
+                    returnTextToUserByLang(lang, "event_is_not_available"));
         }
 
         if (event.getDateTime().isBefore(LocalDateTime.now())) {
-            throw new EventValidationException("event_already_expired", 
-                returnTextToUserByLang(lang, "event_already_expired"));
+            throw new EventValidationException("event_already_expired",
+                    returnTextToUserByLang(lang, "event_already_expired"));
         }
 
-        if (event.getCurrentParticipants() != null && 
-            event.getCurrentParticipants().hasParticipant(userId)) {
-            throw new EventValidationException("user_already_joined", 
-                returnTextToUserByLang(lang, "user_already_joined"));
+        if (event.getCurrentParticipants() != null &&
+                event.getCurrentParticipants().hasParticipant(userId)) {
+            throw new EventValidationException("user_already_joined",
+                    returnTextToUserByLang(lang, "user_already_joined"));
         }
 
-        if (event.getCurrentParticipants() != null && 
-            event.getCurrentParticipants().getSize() >= event.getSportEvent().getMaxParticipants()) {
-            throw new EventValidationException("event_is_full", 
-                returnTextToUserByLang(lang, "event_is_full"));
+        if (event.getCurrentParticipants() != null &&
+                event.getCurrentParticipants().getSize() >= event.getSportEvent().getMaxParticipants()) {
+            throw new EventValidationException("event_is_full",
+                    returnTextToUserByLang(lang, "event_is_full"));
         }
     }
 
     private void validateEventOrganizer(Event event, Long userId, String lang) {
         if (!Objects.equals(event.getOrganizerEvent().getOrganizerId(), userId)) {
-            throw new EventValidationException("not_allowed", 
-                returnTextToUserByLang(lang, "not_allowed"));
+            throw new EventValidationException("not_allowed",
+                    returnTextToUserByLang(lang, "not_allowed"));
         }
     }
 
     private EventStatus validateAndGetEventStatus(String action, String lang) {
         if (!EventStatus.isValid(action)) {
-            throw new EventValidationException("action_not_available", 
-                returnTextToUserByLang(lang, "action_not_available"));
+            throw new EventValidationException("action_not_available",
+                    returnTextToUserByLang(lang, "action_not_available"));
         }
         return EventStatus.valueOf(action.toUpperCase());
     }
@@ -352,20 +352,20 @@ public class EventsService {
             // Организатор может выйти только если событие отменено
             if (!event.getStatus().equalsIgnoreCase(EventStatus.CANCELLED.name())) {
                 throw new EventValidationException("organizer_must_cancel_first",
-                    returnTextToUserByLang(lang, "organizer_must_cancel_first"));
+                        returnTextToUserByLang(lang, "organizer_must_cancel_first"));
             }
         } else {
             // Обычный участник может выйти только если событие открыто
             if (!event.getStatus().equalsIgnoreCase(EventStatus.OPEN.name())) {
                 throw new EventValidationException("event_not_open_for_leaving",
-                    returnTextToUserByLang(lang, "event_not_open_for_leaving"));
+                        returnTextToUserByLang(lang, "event_not_open_for_leaving"));
             }
         }
 
         if (event.getCurrentParticipants() == null ||
-            !event.getCurrentParticipants().hasParticipant(participantId)) {
+                !event.getCurrentParticipants().hasParticipant(participantId)) {
             throw new EventValidationException("not_participant",
-                returnTextToUserByLang(lang, "not_participant"));
+                    returnTextToUserByLang(lang, "not_participant"));
         }
     }
 
@@ -433,9 +433,9 @@ public class EventsService {
 
     public List<EventDTO> getLastCompletedEventsForUser(Long userId) {
         log.info("Getting last completed events for user {}", userId);
-        
+
         List<Event> events = eventsRepository.findLastThreeCompletedEventsByUser(userId);
-        
+
         return events.stream()
                 .map(this::convertToDTO)
                 .toList();

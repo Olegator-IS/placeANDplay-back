@@ -17,16 +17,16 @@ import java.util.List;
 public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecificationExecutor<Event> {
 
     Event findEventByEventId(Long eventId);
-    
+
     Page<Event> findAllByPlaceId(Long placeId, Pageable pageable);
-    
+
     List<Event> findAllByPlaceId(Long placeId);
-    
+
     @Query("SELECT e FROM Event e WHERE e.status = 'OPEN' AND DATE(e.dateTime) = :today")
     List<Event> findOpenEventsForToday(@Param("today") LocalDate today);
 
     List<Event> findByStatusAndDateTimeBefore(String status, LocalDateTime dateTime);
-    
+
     List<Event> findByStatus(String status);
 
     @Query(value = """
@@ -60,4 +60,3 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             """, nativeQuery = true)
     List<Event> findAllActivityByUser(Long userId);
 }
-

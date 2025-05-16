@@ -5,7 +5,7 @@ import com.is.auth.config.JwtAuthenticationFilter;
 import com.is.auth.config.TokenSecurity;
 import com.is.auth.model.dto.ActivityStatsDTO;
 import com.is.auth.model.dto.ReputationDTO;
-import com.is.auth.model.dto.UserInfoResponse;
+import com.is.auth.model.user.UserInfoResponse;
 import com.is.auth.exception.UserAlreadyExistsException;
 import com.is.auth.model.ResponseAnswers.Response;
 import com.is.auth.model.enums.Language;
@@ -364,7 +364,8 @@ public class UserService {
                 "firstName", "GUEST",
                 "lastName", "GUEST",
                 "email", "GUEST",
-                "role", "GUEST"
+                "role", "GUEST",
+                "profilePictureUrl", ""
             );
         }
 
@@ -375,21 +376,37 @@ public class UserService {
             .email(user.getEmail())
             .role("USER")
             .isEmailVerified(user.isEmailVerified())
+            .profilePictureUrl("")
             .build();
 
         if (userAddInfo.isPresent()) {
             UserAdditionalInfo info = userAddInfo.get();
-            response.setHobbies(info.getHobbies());
+            response.setHobbies(Arrays.asList(info.getHobbies().split(",")));
             response.setFavoriteSports(info.getFavoriteSports());
             response.setBio(info.getBio());
             response.setGender(info.getGender());
             response.setBirthDate(info.getBirthDate());
-            response.setCity(info.getCurrentLocationCityId());
-            response.setCountry(info.getCurrentLocationCountryId());
-            response.setAvailability(info.getAvailability());
+            response.setCity(info.getCurrentLocationCityId() != null ? info.getCurrentLocationCityId().longValue() : null);
+            response.setCountry(info.getCurrentLocationCountryId() != null ? info.getCurrentLocationCountryId().longValue() : null);
+            
+            // Fix availability deserialization
+            try {
+                if (info.getAvailability() != null) {
+                    Map<String, Object> availabilityMap = objectMapper.readValue(
+                        info.getAvailability(), 
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                    );
+                    response.setAvailability(availabilityMap);
+                }
+            } catch (Exception e) {
+                log.error("Error deserializing availability for user {}: {}", user.getUserId(), e.getMessage());
+                response.setAvailability(null);
+            }
+            
             response.setLookingFor(info.getLookingFor());
             response.setOpenToNewConnections(info.getOpenToNewConnections());
             response.setDateRegistered(user.getRegistrationDate());
+            response.setProfilePictureUrl(info.getProfilePictureUrl() != null ? info.getProfilePictureUrl() : "");
 
             // Add contacts
             UserContact contacts = userContactRepository.findByUserId(user.getUserId());
@@ -573,7 +590,7 @@ public class UserService {
                     ? userRepository.getUserInfoByEmail(loginRequest.getEmail()).getPasswordHash()
                     : passwordEncoder.encode("GUEST");
             if (passwordEncoder.matches(loginRequest.getPassword(), storedHashedPassword)) {
-                Response responseToken = getToken(loginRequest.getEmail(), loginRequest.getPassword()).getBody();
+                Response responseToken =    getToken(loginRequest.getEmail(), loginRequest.getPassword()).getBody();
                 assert responseToken != null;
                 Response response = new Response(HttpStatus.OK.value(), "User log in successfully",
                         responseToken.getTokenInfo());
@@ -594,16 +611,22 @@ public class UserService {
         }
     }
 
+    @Transactional
     public ResponseEntity<Response> uploadProfilePicture(MultipartFile file, Long userId) {
         try {
-            log.info("Полученный userID при смене аватара {}",userId);
+            log.info("Полученный userID при смене аватара {}", userId);
             Optional<UserAdditionalInfo> userInfo = userAdditionalInfoRepository.findById(userId);
             if (!userInfo.isPresent()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new Response(404, "USER_NOT_FOUND", "User not found"));
             }
             String fileUrl = fileStorageService.uploadFile(file, "profile-pictures");
-            // Не обновляем поле profilePictureUrl, просто возвращаем URL
+            
+            // Обновляем URL профильной картинки в базе данных
+            UserAdditionalInfo userAdditionalInfo = userInfo.get();
+            userAdditionalInfo.setProfilePictureUrl(fileUrl);
+            userAdditionalInfoRepository.save(userAdditionalInfo);
+            
             return ResponseEntity.ok(new Response(200, "PROFILE_PICTURE_UPDATED", fileUrl));
         } catch (Exception e) {
             log.error("Error uploading profile picture for user {}: {}", userId, e.getMessage());

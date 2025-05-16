@@ -28,21 +28,21 @@ public class EventScheduler {
         try {
             // Проверяем все OPEN события
             List<Event> openEvents = eventsRepository.findByStatus(EventStatus.OPEN.name());
-            
+
             if (!openEvents.isEmpty()) {
                 log.info("Found {} open events to check", openEvents.size());
-                
+
                 openEvents.forEach(event -> {
                     try {
                         // Если время события прошло, переводим в EXPIRED
                         if (event.getDateTime().isBefore(now)) {
                             event.setStatus(EventStatus.EXPIRED.name());
                             eventsRepository.save(event);
-                            log.info("Updated event {} status to EXPIRED. Event time was: {}", 
-                                event.getEventId(), event.getDateTime());
+                            log.info("Updated event {} status to EXPIRED. Event time was: {}",
+                                    event.getEventId(), event.getDateTime());
                         } else {
-                            log.debug("Event {} is still valid. Current time: {}, Event time: {}", 
-                                event.getEventId(), now, event.getDateTime());
+                            log.debug("Event {} is still valid. Current time: {}, Event time: {}",
+                                    event.getEventId(), now, event.getDateTime());
                         }
                     } catch (Exception e) {
                         log.error("Error checking event {}", event.getEventId(), e);

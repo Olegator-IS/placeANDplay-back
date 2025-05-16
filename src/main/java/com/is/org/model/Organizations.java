@@ -1,10 +1,13 @@
 package com.is.org.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.vladmihalcea.hibernate.type.json.JsonType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Type;
+import org.hibernate.annotations.TypeDef;
+import org.hibernate.annotations.TypeDefs;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
@@ -14,6 +17,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "organizations", schema = "organizations")
+@TypeDefs({
+    @TypeDef(name = "json", typeClass = JsonType.class)
+})
 public class Organizations {
 
     @Id
@@ -42,7 +48,7 @@ public class Organizations {
     @Column(name = "max_capacity")
     private Integer maxCapacity;
 
-    @Type(type = "jsonb")
+    @Type(type = "json")
     @Column(name = "attributes", columnDefinition = "jsonb")
     private JsonNode attributes;
 
