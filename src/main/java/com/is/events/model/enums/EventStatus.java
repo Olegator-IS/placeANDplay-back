@@ -1,28 +1,60 @@
 package com.is.events.model.enums;
 
-import java.util.Arrays;
 import java.util.Set;
-import java.util.HashSet;
+import java.util.EnumSet;
 
 public enum EventStatus {
-    OPEN(Set.of("COMPLETED", "CANCELLED")),
-    COMPLETED(Set.of()),
-    CANCELLED(Set.of()),
-    EXPIRED(Set.of());
+    PENDING_APPROVAL("Ожидает подтверждения"),
+    CHANGES_REQUESTED("Требуются изменения"),
+    REJECTED("Отклонено"),
+    CONFIRMED("Подтверждено"),
+    IN_PROGRESS("В процессе"),
+    COMPLETED("Завершено"),
+    CANCELLED("Отменено"),
+    EXPIRED("Просрочено");
 
-    private final Set<String> allowedTransitions;
+    private final String displayName;
 
-    EventStatus(Set<String> allowedTransitions) {
-        this.allowedTransitions = allowedTransitions;
+    EventStatus(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getDisplayName() {
+        return displayName;
     }
 
     public boolean canTransitionTo(EventStatus newStatus) {
-        return allowedTransitions.contains(newStatus.name());
+        return getAllowedTransitions(this).contains(newStatus);
+    }
+
+    private static Set<EventStatus> getAllowedTransitions(EventStatus currentStatus) {
+        return switch (currentStatus) {
+            case PENDING_APPROVAL -> EnumSet.of(
+                CONFIRMED,
+                REJECTED,
+                CHANGES_REQUESTED
+            );
+            case CHANGES_REQUESTED -> EnumSet.of(
+                PENDING_APPROVAL, // После внесения изменений организатором
+                REJECTED // Если изменения не были внесены вовремя
+            );
+            case CONFIRMED -> EnumSet.of(
+                IN_PROGRESS, // Когда событие начинается
+                CANCELLED // Только организация может отменить до начала события
+            );
+            case IN_PROGRESS -> EnumSet.of(
+                COMPLETED // После завершения события
+            );
+            case REJECTED, COMPLETED, CANCELLED, EXPIRED -> EnumSet.noneOf(EventStatus.class);
+        };
     }
 
     public static boolean isValid(String status) {
-        return Arrays.stream(EventStatus.values())
-                .map(Enum::name)
-                .anyMatch(s -> s.equals(status.toUpperCase()));
+        try {
+            EventStatus.valueOf(status.toUpperCase());
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 } 

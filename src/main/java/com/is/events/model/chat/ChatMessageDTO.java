@@ -19,4 +19,5 @@ public class ChatMessageDTO {
     private String content;
     private LocalDateTime sentAt;
     private String senderAvatarUrl;
+    private String type;
 } 

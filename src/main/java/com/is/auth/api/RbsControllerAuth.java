@@ -319,6 +319,20 @@ public class RbsControllerAuth {
         }
     }
 
+    @ApiOperation(value = "Check email verification status", notes = "Returns the verification status of a user's email")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Successfully retrieved verification status"),
+        @ApiResponse(code = 404, message = "User not found"),
+        @ApiResponse(code = 500, message = "Internal server error")
+    })
+    @GetMapping("/email/verification-status")
+    public ResponseEntity<?> checkEmailVerificationStatus(
+            @RequestParam String email,
+            @RequestHeader(value = "language", required = true) String language) {
+        validateLanguage(language);
+        return userService.checkEmailVerificationStatus(email, language);
+    }
+
     private void validateLanguage(String language) {
         if (!language.equals("ru") && !language.equals("en") && !language.equals("uz")) {
             throw new IllegalArgumentException("Unsupported language. Supported languages are: ru, en, uz");

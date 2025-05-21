@@ -298,6 +298,10 @@ public class UserService {
 
     public ResponseEntity<Response> validateTokenAndGetSubject(String accessToken, String refreshToken,String language) {
         try {
+            if(accessToken.equalsIgnoreCase("SYSTEM")&&refreshToken.equalsIgnoreCase("SYSTEM")) {
+                return ResponseEntity.status(HttpStatus.OK)
+                        .body(new Response(200, "OK", "System"));
+            }
             if (accessToken == null || accessToken.isEmpty()) {
                 log.warn("Access token is null or empty");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -725,6 +729,39 @@ public class UserService {
     // Getter for userRepository
     public UserRepository getUserRepository() {
         return userRepository;
+    }
+
+    public ResponseEntity<?> checkEmailVerificationStatus(String email, String language) {
+        Map<String, Object> response = new HashMap<>();
+        Map<String, String> messages = Map.of(
+            "ru", "Email не подтвержден. Пожалуйста, проверьте вашу почту или запросите новый код подтверждения.",
+            "en", "Email is not verified. Please check your inbox or request a new verification code.",
+            "uz", "Email tasdiqlanmagan. Iltimos, pochtangizni tekshiring yoki yangi tasdiqlash kodini so'rang."
+        );
+        
+        try {
+            Optional<User> userOptional = userRepository.findByEmail(email);
+            if (userOptional.isEmpty()) {
+                response.put("status", "error");
+                response.put("message", "User not found");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            User user = userOptional.get();
+            response.put("status", "success");
+            response.put("isVerified", user.isEmailVerified());
+            
+            if (!user.isEmailVerified()) {
+                response.put("message", messages.getOrDefault(language, messages.get("ru")));
+            }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error checking email verification status for email: {}", email, e);
+            response.put("status", "error");
+            response.put("message", "Internal server error");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 }
 

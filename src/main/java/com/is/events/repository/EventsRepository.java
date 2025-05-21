@@ -1,6 +1,7 @@
 package com.is.events.repository;
 
 import com.is.events.model.Event;
+import com.is.events.model.enums.EventStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,12 +23,12 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
 
     List<Event> findAllByPlaceId(Long placeId);
 
-    @Query("SELECT e FROM Event e WHERE e.status = 'OPEN' AND DATE(e.dateTime) = :today")
-    List<Event> findOpenEventsForToday(@Param("today") LocalDate today);
+    @Query("SELECT e FROM Event e WHERE e.status = :status AND DATE(e.dateTime) = :today")
+    List<Event> findOpenEventsForToday(@Param("status") EventStatus status, @Param("today") LocalDate today);
 
-    List<Event> findByStatusAndDateTimeBefore(String status, LocalDateTime dateTime);
+    List<Event> findByStatusAndDateTimeBefore(EventStatus status, LocalDateTime dateTime);
 
-    List<Event> findByStatus(String status);
+    List<Event> findByStatus(EventStatus status);
 
     @Query(value = """
             SELECT DISTINCT e.* FROM events.events e 
@@ -47,7 +48,7 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
 
     @Query(value = """
             SELECT DISTINCT e.* FROM events.events e 
-            WHERE e.status = 'OPEN'
+            WHERE e.status NOT IN ('EXPIRED', 'REJECTED')
             AND (
                 CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
                 OR EXISTS (
@@ -59,4 +60,28 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             ORDER BY e.date_time DESC 
             """, nativeQuery = true)
     List<Event> findAllActivityByUser(Long userId);
+
+    @Query(value = """
+            SELECT COUNT(e.*) FROM events.events e 
+            WHERE CAST((e.organizer_event->>'organizerId') AS bigint) = :organizerId
+            AND DATE(e.date_time) = :date
+            AND e.status NOT IN ('REJECTED', 'EXPIRED')
+            """, nativeQuery = true)
+    int countEventsByOrganizerAndDate(@Param("organizerId") Long organizerId, @Param("date") LocalDate date);
+
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE CAST((e.organizer_event->>'organizerId') AS bigint) = :organizerId
+            AND DATE(e.date_time) = :date
+            AND e.status NOT IN ('REJECTED', 'EXPIRED')
+            ORDER BY e.date_time DESC
+            """, nativeQuery = true)
+    List<Event> findEventsByOrganizerAndDate(@Param("organizerId") Long organizerId, @Param("date") LocalDate date);
+
+//    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
+    
+//    List<Event> findByStatusAndEndDateTimeBefore(String status, LocalDateTime dateTime);
+    
+//    @Query("SELECT e FROM Event e WHERE e.organizerId = :organizerId AND DATE(e.startDateTime) = DATE(:date)")
+//    List<Event> findByOrganizerAndDate(@Param("organizerId") Long organizerId, @Param("date") LocalDateTime date);
 }

@@ -67,4 +67,12 @@ public class CurrentParticipants implements Serializable {
             size = participants.size();
         }
     }
+
+    public String getParticipantName(Long participantId) {
+        return participants.stream()
+                .filter(p -> p.getParticipantId().equals(participantId))
+                .map(Participant::getParticipantName)
+                .findFirst()
+                .orElse("Unknown Participant");
+    }
 }

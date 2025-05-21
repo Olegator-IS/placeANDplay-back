@@ -9,6 +9,7 @@ import com.is.events.model.CurrentParticipants;
 import com.is.events.model.Event;
 import com.is.events.model.UserActivityTracking;
 import com.is.events.model.enums.EventStatus;
+import com.is.events.model.enums.EventMessageType;
 import com.is.events.repository.EventsRepository;
 import com.is.events.repository.UserActivityTrackingRepository;
 import com.is.auth.repository.UserRepository;
@@ -20,12 +21,23 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.is.events.dto.EventAvailabilityDTO;
+import com.is.events.dto.EventCreationAvailabilityResponse;
+import com.is.events.dto.EventStatusUpdateRequest;
+
+import com.is.events.service.EventMessageService;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +50,7 @@ public class EventsService {
     private final UserProfileService userProfileService;
     private final WebSocketService webSocketService;
     private final UserRepository userRepository;
+    private final EventMessageService eventMessageService;
 
 //    @Autowired
 //    private Logger logger;
@@ -62,7 +75,7 @@ public class EventsService {
         dto.setTitle(event.getSportEvent().getSportName());
         dto.setDescription(event.getDescription());
         dto.setDateTime(event.getDateTime());
-        dto.setStatus(event.getStatus());
+        dto.setStatus(event.getStatus().name());
         dto.setPlaceId(event.getPlaceId());
 
         // Проверяем, есть ли запись об активности пользователя
@@ -120,7 +133,7 @@ public class EventsService {
         }
 
         // Установка дополнительных полей
-        dto.setJoinable(EventStatus.OPEN.name().equals(event.getStatus()));
+        dto.setJoinable(event.getStatus() == EventStatus.PENDING_APPROVAL);
         dto.setMaxParticipants(event.getSportEvent().getMaxParticipants());
         dto.setEventType(event.getSportEvent().getSportType());
         dto.setLocation(event.getSportEvent().getLocation());
@@ -137,7 +150,6 @@ public class EventsService {
     @Transactional
     public EventDTO addEvent(Event event, String lang) {
         validateEventDate(event.getDateTime(), lang);
-        event.setStatus(EventStatus.OPEN.name());
         log.info("Creating new event: {}", event);
 
         Long organizerId = event.getOrganizerEvent().getOrganizerId();
@@ -159,7 +171,11 @@ public class EventsService {
         }
 
         event.setFirstTimeEventCreation(isFirstEventCreation);
+        event.setStatus(EventStatus.PENDING_APPROVAL);
         Event savedEvent = eventsRepository.save(event);
+
+        // Отправляем системное сообщение о создании ивента
+        eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_CREATED, null,lang);
 
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
@@ -188,6 +204,9 @@ public class EventsService {
             log.info("Current participants state: {}", event.getCurrentParticipants());
             Event updatedEvent = eventsRepository.save(event);
 
+            // Отправляем системное сообщение о присоединении участника
+            eventMessageService.sendEventMessage(updatedEvent, EventMessageType.PARTICIPANT_JOINED, userName,lang);
+
             // Отправляем уведомление через WebSocket
             webSocketService.notifyEventUpdate(event.getPlaceId());
             webSocketService.sendEventUpdate(convertToDTO(updatedEvent));
@@ -212,16 +231,35 @@ public class EventsService {
         validateEventOrganizer(event, userId, lang);
 
         EventStatus newStatus = validateAndGetEventStatus(action, lang);
-        EventStatus currentStatus = EventStatus.valueOf(event.getStatus().toUpperCase());
+        EventStatus currentStatus = event.getStatus();
+
+        // Проверка времени для перехода в IN_PROGRESS
+        if (newStatus == EventStatus.IN_PROGRESS) {
+            LocalDateTime now = LocalDateTime.now();
+            if (event.getDateTime().isAfter(now)) {
+                throw new EventValidationException(
+                    "event_time_not_reached",
+                    String.format("Cannot start event before its scheduled time. Event time: %s, Current time: %s",
+                        event.getDateTime(), now)
+                );
+            }
+        }
 
         if (!currentStatus.canTransitionTo(newStatus)) {
             throw new EventValidationException("status_transition_error",
                     String.format("Cannot transition from %s to %s", currentStatus, newStatus));
         }
 
-        event.setStatus(newStatus.name());
+        event.setStatus(newStatus);
         log.info("Event {} status changed to {} by organizer {}", eventId, newStatus, userId);
         Event savedEvent = eventsRepository.save(event);
+
+        // Отправляем системное сообщение о смене статуса
+        if (newStatus == EventStatus.IN_PROGRESS) {
+            eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_STARTED, null,lang);
+        } else {
+            eventMessageService.sendEventMessage(savedEvent, EventMessageType.STATUS_CHANGED, null,lang);
+        }
 
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
@@ -234,7 +272,7 @@ public class EventsService {
     public List<Event> getEventsForToday(LocalDate today) {
         try {
             log.info("Processing events for today: {}", today);
-            List<Event> events = eventsRepository.findOpenEventsForToday(today);
+            List<Event> events = eventsRepository.findOpenEventsForToday(EventStatus.PENDING_APPROVAL, today);
             LocalDateTime now = LocalDateTime.now();
 
             events.stream()
@@ -243,7 +281,7 @@ public class EventsService {
                         try {
                             log.info("Marking event {} as EXPIRED because its datetime {} is before now {}",
                                     event.getEventId(), event.getDateTime(), now);
-                            event.setStatus(EventStatus.EXPIRED.name());
+                            event.setStatus(EventStatus.EXPIRED);
                             eventsRepository.save(event);
                         } catch (Exception e) {
                             log.error("Error updating event {} status to EXPIRED", event.getEventId(), e);
@@ -272,9 +310,13 @@ public class EventsService {
                         returnTextToUserByLang(lang, "not_participant"));
             }
 
+            String participantName = event.getCurrentParticipants().getParticipantName(participantId);
             event.getCurrentParticipants().removeParticipant(participantId);
 
             Event updatedEvent = eventsRepository.save(event);
+
+            // Отправляем системное сообщение о выходе участника
+            eventMessageService.sendEventMessage(updatedEvent, EventMessageType.PARTICIPANT_LEFT, participantName,lang);
 
             // Отправляем уведомление через WebSocket
             webSocketService.notifyEventUpdate(event.getPlaceId());
@@ -306,7 +348,15 @@ public class EventsService {
     }
 
     private void validateEventJoinability(Event event, Long userId, String lang) {
-        if (!event.getStatus().equalsIgnoreCase(EventStatus.OPEN.name())) {
+        if (event.getStatus() != EventStatus.PENDING_APPROVAL) {
+            if (event.getStatus() == EventStatus.IN_PROGRESS) {
+                throw new EventValidationException("event_in_progress",
+                        returnTextToUserByLang(lang, "event_in_progress"));
+            }
+
+        }
+
+        if(event.getStatus() == EventStatus.IN_PROGRESS){
             throw new EventValidationException("event_is_not_available",
                     returnTextToUserByLang(lang, "event_is_not_available"));
         }
@@ -345,21 +395,34 @@ public class EventsService {
     }
 
     private void validateEventLeaving(Event event, Long participantId, String lang) {
-        // Проверяем, является ли участник организатором
         boolean isOrganizer = Objects.equals(event.getOrganizerEvent().getOrganizerId(), participantId);
+        System.out.println(event.getStatus());
 
         if (isOrganizer) {
-            // Организатор может выйти только если событие отменено
-            if (!event.getStatus().equalsIgnoreCase(EventStatus.CANCELLED.name())) {
+            if (event.getStatus() != EventStatus.CANCELLED) {
                 throw new EventValidationException("organizer_must_cancel_first",
                         returnTextToUserByLang(lang, "organizer_must_cancel_first"));
             }
         } else {
-            // Обычный участник может выйти только если событие открыто
-            if (!event.getStatus().equalsIgnoreCase(EventStatus.OPEN.name())) {
-                throw new EventValidationException("event_not_open_for_leaving",
-                        returnTextToUserByLang(lang, "event_not_open_for_leaving"));
+            if (event.getStatus() == EventStatus.IN_PROGRESS) {
+                throw new EventValidationException("cannot_leave_in_progress",
+                        returnTextToUserByLang(lang, "cannot_leave_in_progress"));
             }
+
+            if (event.getStatus() == EventStatus.CONFIRMED) {
+                LocalDateTime now = LocalDateTime.now();
+                Duration timeUntilEvent = Duration.between(now, event.getDateTime());
+                if (timeUntilEvent.toHours() < 2) {
+                    throw new EventValidationException("cannot_leave_before_start",
+                            returnTextToUserByLang(lang, "cannot_leave_before_start"));
+                }
+            }
+
+//            if (event.getStatus() != EventStatus.PENDING_APPROVAL ||
+//                event.getStatus() != EventStatus.CONFIRMED) {
+//                throw new EventValidationException("event_not_open_for_leaving",
+//                        returnTextToUserByLang(lang, "event_not_open_for_leaving"));
+//            }
         }
 
         if (event.getCurrentParticipants() == null ||
@@ -427,6 +490,30 @@ public class EventsService {
             case "uz_user_not_found" -> "Foydalanuvchi tizimda topilmadi!";
             case "en_user_not_found" -> "User not found in the system!";
 
+            case "ru_too_many_events_per_day" -> "Вы не можете создать больше 3 событий в один день!";
+            case "uz_too_many_events_per_day" -> "Bir kunda 3 tadan ortiq tadbir yarata olmaysiz!";
+            case "en_too_many_events_per_day" -> "You cannot create more than 3 events in one day!";
+
+            case "ru_time_too_close" -> "Между событиями должно быть не менее 3 часов!";
+            case "uz_time_too_close" -> "Tadbirlar orasida kamida 3 soat bo'lishi kerak!";
+            case "en_time_too_close" -> "There must be at least 3 hours between events!";
+
+            case "ru_can_create_event" -> "Вы можете создать событие!";
+            case "uz_can_create_event" -> "Siz tadbir yaratishingiz mumkin!";
+            case "en_can_create_event" -> "You can create an event!";
+
+            case "ru_event_in_progress" -> "Нельзя присоединиться к событию, которое уже началось!";
+            case "uz_event_in_progress" -> "Allaqachon boshlangan tadbirga qo'shilish mumkin emas!";
+            case "en_event_in_progress" -> "Cannot join an event that is already in progress.";
+
+            case "ru_cannot_leave_in_progress" -> "Нельзя покинуть событие, которое уже началось!";
+            case "uz_cannot_leave_in_progress" -> "Boshlangan tadbirni tark etish mumkin emas!";
+            case "en_cannot_leave_in_progress" -> "Cannot leave an event that is in progress.";
+
+            case "ru_cannot_leave_before_start" -> "Нельзя покинуть событие менее чем за 2 часа до его начала!";
+            case "uz_cannot_leave_before_start" -> "Tadbirni boshlanishiga 2 soatdan kam vaqt qolganda tark etish mumkin emas!";
+            case "en_cannot_leave_before_start" -> "Cannot leave the event less than 2 hours before it starts.";
+
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };
     }
@@ -450,6 +537,167 @@ public class EventsService {
                 .toList();
     }
 
+    public List<EventAvailabilityDTO> getEventAvailability(Long placeId, LocalDate startDate) {
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = startDate.plusDays(30).atTime(23, 59, 59);
 
+        List<Event> events = eventsRepository.findAll(
+            (root, query, cb) -> {
+                return cb.and(
+                    cb.equal(root.get("placeId"), placeId),
+                    cb.equal(root.get("status"), EventStatus.PENDING_APPROVAL),
+                    cb.greaterThanOrEqualTo(root.get("dateTime"), startDateTime),
+                    cb.lessThanOrEqualTo(root.get("dateTime"), endDateTime)
+                );
+            }
+        );
 
+        Map<LocalDate, Long> eventCountByDate = events.stream()
+            .map(event -> event.getDateTime().toLocalDate())
+            .collect(Collectors.groupingBy(
+                date -> date,
+                Collectors.counting()
+            ));
+
+        return startDate.datesUntil(startDate.plusDays(30))
+            .map(date -> EventAvailabilityDTO.builder()
+                .date(date)
+                .eventCount(eventCountByDate.getOrDefault(date, 0L).intValue())
+                .build())
+            .collect(Collectors.toList());
+    }
+
+    public EventCreationAvailabilityResponse checkEventCreationAvailability(Long organizerId, LocalDate date, String lang) {
+        int eventCount = eventsRepository.countEventsByOrganizerAndDate(organizerId, date);
+        
+        if (eventCount >= 3) {
+            return EventCreationAvailabilityResponse.builder()
+                    .available(false)
+                    .message(returnTextToUserByLang(lang, "too_many_events_per_day"))
+                    .build();
+        }
+        
+        return EventCreationAvailabilityResponse.builder()
+                .available(true)
+                .message(returnTextToUserByLang(lang, "can_create_event"))
+                .build();
+    }
+
+    public EventCreationAvailabilityResponse checkEventTimeAvailability(Long organizerId, LocalDate date, LocalDateTime proposedTime, String lang) {
+        // First check the daily limit
+        int eventCount = eventsRepository.countEventsByOrganizerAndDate(organizerId, date);
+        if (eventCount >= 3) {
+            return EventCreationAvailabilityResponse.builder()
+                    .available(false)
+                    .message(returnTextToUserByLang(lang, "too_many_events_per_day"))
+                    .build();
+        }
+
+        // Then check time conflicts
+        List<Event> existingEvents = eventsRepository.findEventsByOrganizerAndDate(organizerId, date);
+        for (Event event : existingEvents) {
+            Duration timeDifference = Duration.between(event.getDateTime(), proposedTime).abs();
+            if (timeDifference.toMinutes() < 180) { // 3 hours minimum difference
+                return EventCreationAvailabilityResponse.builder()
+                        .available(false)
+                        .message(returnTextToUserByLang(lang, "time_too_close"))
+                        .build();
+            }
+        }
+
+        return EventCreationAvailabilityResponse.builder()
+                .available(true)
+                .message(returnTextToUserByLang(lang, "can_create_event"))
+                .build();
+    }
+
+    public Event confirmEvent(Long eventId, Long organizationId) {
+        Event event = findEventById(eventId);
+        validateOrganizationAccess(event, organizationId);
+        
+        if (!event.getStatus().equals(EventStatus.PENDING_APPROVAL) && 
+            !event.getStatus().equals(EventStatus.CHANGES_REQUESTED)) {
+            throw new IllegalStateException("Event can only be confirmed when in PENDING_APPROVAL or CHANGES_REQUESTED status");
+        }
+        
+        event.confirm();
+        return eventsRepository.save(event);
+    }
+
+    public Event rejectEvent(Long eventId, Long organizationId, EventStatusUpdateRequest request) {
+        Event event = findEventById(eventId);
+        validateOrganizationAccess(event, organizationId);
+        
+        if (!event.getStatus().equals(EventStatus.PENDING_APPROVAL) && 
+            !event.getStatus().equals(EventStatus.CHANGES_REQUESTED)) {
+            throw new IllegalStateException("Event can only be rejected when in PENDING_APPROVAL or CHANGES_REQUESTED status");
+        }
+        
+        event.reject(request.getReason(), organizationId);
+        return eventsRepository.save(event);
+    }
+
+    public Event requestEventChanges(Long eventId, Long organizationId, EventStatusUpdateRequest request) {
+        Event event = findEventById(eventId);
+        validateOrganizationAccess(event, organizationId);
+        
+        if (!event.getStatus().equals(EventStatus.PENDING_APPROVAL)) {
+            throw new IllegalStateException("Changes can only be requested for events in PENDING_APPROVAL status");
+        }
+        
+        event.requestChanges(request.getRequestedChanges(), organizationId);
+        return eventsRepository.save(event);
+    }
+
+    public Event startEvent(Long eventId) {
+        Event event = findEventById(eventId);
+        event.startEvent();
+        return eventsRepository.save(event);
+    }
+
+    public Event completeEvent(Long eventId) {
+        Event event = findEventById(eventId);
+        event.complete();
+        return eventsRepository.save(event);
+    }
+
+    public Event cancelEvent(Long eventId, Long organizationId) {
+        Event event = findEventById(eventId);
+        validateOrganizationAccess(event, organizationId);
+        event.cancel();
+        return eventsRepository.save(event);
+    }
+
+    private void validateOrganizationAccess(Event event, Long organizationId) {
+        if (!event.getPlaceId().equals(organizationId)) {
+            throw new AccessDeniedException("Organization does not have access to this event");
+        }
+    }
+
+    private Event findEventById(Long eventId) {
+        return eventsRepository.findEventByEventId(eventId);
+    }
+
+    // Scheduled task to check and update event statuses
+    @Scheduled(cron = "0 */5 * * * *") // Runs every 5 minutes
+    public void updateEventStatuses() {
+        LocalDateTime now = LocalDateTime.now();
+        
+        // Find confirmed events that should be started
+        List<Event> confirmedEvents = eventsRepository.findByStatusAndDateTimeBefore(
+            EventStatus.CONFIRMED, now);
+        confirmedEvents.forEach(event -> {
+            try {
+                // Дополнительная проверка времени для большей точности
+                if (!event.getDateTime().isAfter(now)) {
+                    event.startEvent();
+                    eventsRepository.save(event);
+                    log.info("Event {} automatically started at {}. Event time was: {}", 
+                        event.getEventId(), now, event.getDateTime());
+                }
+            } catch (Exception e) {
+                log.error("Error starting event {}: {}", event.getEventId(), e.getMessage());
+            }
+        });
+    }
 }

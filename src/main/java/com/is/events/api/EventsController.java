@@ -1,6 +1,7 @@
 package com.is.events.api;
 
 import com.is.events.dto.EventDTO;
+import com.is.events.dto.EventAvailabilityDTO;
 import com.is.events.model.Event;
 import com.is.events.model.EventFilterDTO;
 import com.is.events.model.EventSpecification;
@@ -16,11 +17,16 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import com.is.events.dto.JoinEventRequest;
+import com.is.events.dto.EventCreationAvailabilityResponse;
+import com.is.events.dto.EventStatusUpdateRequest;
 
 @RestController
 @RequestMapping("/api/v1/events")
@@ -158,5 +164,67 @@ public class EventsController {
             @RequestHeader(value = "language", defaultValue = "ru") String lang) {
         log.info("GET /last-completed request received for user {}", userId);
         return ResponseEntity.ok(eventsService.getUserActivityEvents(userId));
+    }
+
+    @Operation(summary = "Получить доступность событий на 30 дней")
+    @GetMapping("/availability")
+    public ResponseEntity<List<EventAvailabilityDTO>> getEventAvailability(
+            @RequestParam Long placeId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestHeader(defaultValue = "ru") String language) {
+        log.info("Getting event availability for place {} from date {}", placeId, startDate);
+        return ResponseEntity.ok(eventsService.getEventAvailability(placeId, startDate));
+    }
+
+    @GetMapping("/check-availability")
+    @Operation(summary = "Check if user can create an event on a specific date")
+    public ResponseEntity<EventCreationAvailabilityResponse> checkEventCreationAvailability(
+            @RequestParam Long organizerId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime proposedTime,
+            @RequestHeader(defaultValue = "ru") String language) {
+        
+        log.info("Checking event creation availability for organizer {} on date {} with proposedTime {}", 
+                organizerId, date, proposedTime);
+
+        if (proposedTime == null) {
+            return ResponseEntity.ok(eventsService.checkEventCreationAvailability(organizerId, date, language));
+        } else {
+            return ResponseEntity.ok(eventsService.checkEventTimeAvailability(organizerId, date, proposedTime, language));
+        }
+    }
+
+    @PutMapping("/{eventId}/confirm")
+    @Operation(summary = "Confirm an event")
+    public ResponseEntity<Event> confirmEvent(
+            @PathVariable Long eventId,
+            @RequestParam Long organizationId) {
+        return ResponseEntity.ok(eventsService.confirmEvent(eventId, organizationId));
+    }
+
+    @PutMapping("/{eventId}/reject")
+    @Operation(summary = "Reject an event")
+    public ResponseEntity<Event> rejectEvent(
+            @PathVariable Long eventId,
+            @RequestParam Long organizationId,
+            @RequestBody EventStatusUpdateRequest request) {
+        return ResponseEntity.ok(eventsService.rejectEvent(eventId, organizationId, request));
+    }
+
+    @PutMapping("/{eventId}/request-changes")
+    @Operation(summary = "Request changes for an event")
+    public ResponseEntity<Event> requestEventChanges(
+            @PathVariable Long eventId,
+            @RequestParam Long organizationId,
+            @RequestBody EventStatusUpdateRequest request) {
+        return ResponseEntity.ok(eventsService.requestEventChanges(eventId, organizationId, request));
+    }
+
+    @PutMapping("/{eventId}/cancel")
+    @Operation(summary = "Cancel an event")
+    public ResponseEntity<Event> cancelEvent(
+            @PathVariable Long eventId,
+            @RequestParam Long organizationId) {
+        return ResponseEntity.ok(eventsService.cancelEvent(eventId, organizationId));
     }
 }

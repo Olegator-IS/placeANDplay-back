@@ -27,13 +27,16 @@ public class ChatService {
     private final EventMessageRepository messageRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
+    private final WebSocketService webSocketService;
 
     public ChatService(EventMessageRepository messageRepository,
                       SimpMessagingTemplate messagingTemplate,
-                      UserService userService) {
+                      UserService userService,
+                      WebSocketService webSocketService) {
         this.messageRepository = messageRepository;
         this.messagingTemplate = messagingTemplate;
         this.userService = userService;
+        this.webSocketService = webSocketService;
     }
 
     public Page<ChatMessageDTO> getEventMessages(Long eventId, ChatMessagesRequest request,
@@ -73,25 +76,42 @@ public class ChatService {
     }
 
     @Transactional
-    public ChatMessageDTO sendMessage(Long eventId, Long senderId, String content,
-                                      String accessToken,
-                                      String refreshToken,
-                                      String lang) {
-        log.info("Sending message to event: {} from user: {}", eventId, senderId);
-        
-        // Validate user access first
-        validateUserAccess(accessToken, refreshToken, lang);
-        
-        EventMessage message = EventMessage.builder()
+    public ChatMessageDTO sendMessage(Long eventId, Long userId, String message, String accessToken, String refreshToken, String language) {
+        try {
+            // Для системных сообщений (когда userId = 0)
+            if (userId == 0) {
+                EventMessage systemMessage = EventMessage.builder()
+                    .eventId(eventId)
+                    .userId(userId)
+                    .message(message)
+                    .content(message)  // дублируем сообщение в оба поля
+                    .type("SYSTEM")
+                    .timestamp(LocalDateTime.now())
+                    .sentAt(LocalDateTime.now())
+                    .senderName("System")
+                    .build();
+
+                EventMessage savedMessage = messageRepository.save(systemMessage);
+                
+                // Отправляем уведомление через WebSocket
+                ChatMessageDTO messageDTO = convertToDTO(savedMessage);
+                messagingTemplate.convertAndSend("/topic/chat/" + eventId, messageDTO);
+                return messageDTO;
+            }
+
+            // Для обычных пользовательских сообщений
+            validateUserAccess(accessToken, refreshToken, language);
+            
+            ResponseEntity<Response> userResponse = userService.validateTokenAndGetSubject(accessToken, refreshToken, language);
+            EventMessage userMessage = EventMessage.builder()
                 .eventId(eventId)
-                .senderId(senderId)
-                .senderName("User " + senderId) // Default name if we can't get user info
-                .content(content)
+                .senderId(userId)
+                .content(message)
                 .sentAt(LocalDateTime.now())
+                .senderName("User " + userId)
+                .type("USER")
                 .build();
 
-        try {
-            ResponseEntity<Response> userResponse = userService.validateTokenAndGetSubject(accessToken, refreshToken, lang);
             if (userResponse.getBody() != null) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> userInfo = (Map<String, Object>) userResponse.getBody().getResult();
@@ -100,20 +120,19 @@ public class ChatService {
                 String lastName = userInfo.get("lastName") != null ? userInfo.get("lastName").toString() : "";
                 String avatarUrl = userInfo.get("profile_picture_url") != null ? userInfo.get("profile_picture_url").toString() : "";
                 
-                message.setSenderName(firstName + " " + lastName);
-                message.setSenderAvatarUrl(avatarUrl);
+                userMessage.setSenderName(firstName + " " + lastName);
+                userMessage.setSenderAvatarUrl(avatarUrl);
             }
+
+            EventMessage savedMessage = messageRepository.save(userMessage);
+            ChatMessageDTO messageDTO = convertToDTO(savedMessage);
+            messagingTemplate.convertAndSend("/topic/chat/" + eventId, messageDTO);
+            return messageDTO;
+
         } catch (Exception e) {
-            log.warn("Could not get user information, using default values", e);
+            log.error("Error sending message: {}", e.getMessage());
+            throw new RuntimeException("Error sending message", e);
         }
-
-        EventMessage savedMessage = messageRepository.save(message);
-        ChatMessageDTO messageDTO = convertToDTO(savedMessage);
-
-        // Отправляем сообщение всем подписчикам события
-        messagingTemplate.convertAndSend("/topic/chat/" + eventId, messageDTO);
-        
-        return messageDTO;
     }
 
     private ChatMessageDTO convertToDTO(EventMessage message) {
@@ -122,9 +141,10 @@ public class ChatService {
                 .eventId(message.getEventId())
                 .senderId(message.getSenderId())
                 .senderName(message.getSenderName())
-                .content(message.getContent())
-                .sentAt(message.getSentAt())
+                .content(message.getContent() != null ? message.getContent() : message.getMessage())
+                .sentAt(message.getSentAt() != null ? message.getSentAt() : message.getTimestamp())
                 .senderAvatarUrl(message.getSenderAvatarUrl())
+                .type(message.getType())
                 .build();
     }
 } 

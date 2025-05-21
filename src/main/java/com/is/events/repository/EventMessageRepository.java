@@ -15,7 +15,7 @@ import java.util.List;
 public interface EventMessageRepository extends JpaRepository<EventMessage, Long> {
     List<EventMessage> findByEventIdOrderBySentAtAsc(Long eventId);
     
-    @Query("SELECT em FROM ChatEventMessage em WHERE em.eventId = :eventId AND em.sentAt > :since ORDER BY em.sentAt ASC")
+    @Query("SELECT em FROM EventMessage em WHERE em.eventId = :eventId AND em.sentAt > :since ORDER BY em.sentAt ASC")
     List<EventMessage> findByEventIdAndSentAtAfterOrderBySentAtAsc(
         @Param("eventId") Long eventId, 
         @Param("since") LocalDateTime since

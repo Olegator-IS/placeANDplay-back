@@ -8,33 +8,44 @@ import lombok.NoArgsConstructor;
 import javax.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity(name = "ChatEventMessage")
+@Entity
 @Table(name = "event_messages", schema = "events")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class EventMessage {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "message_id")
     private Long messageId;
 
     @Column(name = "event_id", nullable = false)
     private Long eventId;
 
-    @Column(name = "sender_id", nullable = false)
+    @Column(name = "sender_id")
     private Long senderId;
 
-    @Column(name = "sender_name", nullable = false)
+    @Column(name = "sender_name")
     private String senderName;
 
-    @Column(name = "content", nullable = false)
+    @Column(name = "content", columnDefinition = "text")
     private String content;
 
-    @Column(name = "sent_at", nullable = false)
+    @Column(name = "sent_at")
     private LocalDateTime sentAt;
 
     @Column(name = "sender_avatar_url")
     private String senderAvatarUrl;
+
+    @Column(name = "message_type")
+    private String type;
+
+    @Column(name = "user_id")
+    private Long userId;
+
+    @Column(name = "message")
+    private String message;
+
+    @Column(name = "timestamp")
+    private LocalDateTime timestamp;
 } 

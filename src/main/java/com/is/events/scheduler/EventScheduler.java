@@ -23,36 +23,27 @@ public class EventScheduler {
     @Transactional
     public void checkEvents() {
         LocalDateTime now = LocalDateTime.now();
-        log.info("Starting events check at {}", now);
+        log.info("Starting scheduled event check at {}", now);
 
         try {
-            // Проверяем все OPEN события
-            List<Event> openEvents = eventsRepository.findByStatus(EventStatus.OPEN.name());
-
-            if (!openEvents.isEmpty()) {
-                log.info("Found {} open events to check", openEvents.size());
-
-                openEvents.forEach(event -> {
-                    try {
-                        // Если время события прошло, переводим в EXPIRED
-                        if (event.getDateTime().isBefore(now)) {
-                            event.setStatus(EventStatus.EXPIRED.name());
+            List<Event> events = eventsRepository.findAll();
+            
+            events.forEach(event -> {
+                try {
+                    if (event.getDateTime().isBefore(now)) {
+                        if (event.getStatus() == EventStatus.PENDING_APPROVAL ||
+                            event.getStatus() == EventStatus.CHANGES_REQUESTED) {
+                            event.forceExpire(); // Новый метод для принудительного перевода в EXPIRED
                             eventsRepository.save(event);
-                            log.info("Updated event {} status to EXPIRED. Event time was: {}",
-                                    event.getEventId(), event.getDateTime());
-                        } else {
-                            log.debug("Event {} is still valid. Current time: {}, Event time: {}",
-                                    event.getEventId(), now, event.getDateTime());
+                            log.info("Event {} expired due to time", event.getEventId());
                         }
-                    } catch (Exception e) {
-                        log.error("Error checking event {}", event.getEventId(), e);
                     }
-                });
-            } else {
-                log.info("No open events found to check");
-            }
+                } catch (Exception e) {
+                    log.error("Error checking event {}: {}", event.getEventId(), e.getMessage());
+                }
+            });
         } catch (Exception e) {
-            log.error("Error during events check", e);
+            log.error("Error in scheduled event check: {}", e.getMessage());
         }
     }
 } 
