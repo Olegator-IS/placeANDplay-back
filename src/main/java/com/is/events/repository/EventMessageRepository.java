@@ -14,6 +14,7 @@ import java.util.List;
 @Repository
 public interface EventMessageRepository extends JpaRepository<EventMessage, Long> {
     List<EventMessage> findByEventIdOrderBySentAtAsc(Long eventId);
+//    List<EventMessage> findByEventIdOrderBySentAtAsc(Long eventId);
     
     @Query("SELECT em FROM EventMessage em WHERE em.eventId = :eventId AND em.sentAt > :since ORDER BY em.sentAt ASC")
     List<EventMessage> findByEventIdAndSentAtAfterOrderBySentAtAsc(
@@ -22,4 +23,11 @@ public interface EventMessageRepository extends JpaRepository<EventMessage, Long
     );
 
     Page<EventMessage> findByEventId(Long eventId, Pageable pageable);
+
+    @Query("SELECT m FROM EventMessage m WHERE m.eventId = :eventId AND LOWER(m.content) LIKE LOWER(CONCAT('%', :query, '%'))")
+    Page<EventMessage> findByEventIdAndContentContainingIgnoreCase(
+        @Param("eventId") Long eventId,
+        @Param("query") String query,
+        Pageable pageable
+    );
 } 

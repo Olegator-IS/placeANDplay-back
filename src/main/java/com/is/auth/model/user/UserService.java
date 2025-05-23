@@ -21,6 +21,8 @@ import com.is.auth.service.FileStorageService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -35,6 +37,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.CacheEvict;
 
 import javax.crypto.SecretKey;
 import java.io.File;
@@ -791,6 +794,7 @@ public class UserService {
         }
     }
 
+    @Cacheable(value = "userProfilePictures", key = "#userIds")
     public Map<Long, String> getUsersProfilePicturesForChat(List<Long> userIds) {
         Map<Long, String> userAvatars = new HashMap<>();
         try {
@@ -802,6 +806,16 @@ public class UserService {
             log.error("Error getting user profile pictures for chat: {}", e.getMessage());
         }
         return userAvatars;
+    }
+
+    @CacheEvict(value = "userProfilePictures", allEntries = true)
+    public void clearUserProfilePicturesCache() {
+        // Method to clear cache when needed
+    }
+
+    @CacheEvict(value = "userProfilePictures", key = "#userId")
+    public void clearUserProfilePictureCache(Long userId) {
+        // Method to clear specific user's cache
     }
 }
 

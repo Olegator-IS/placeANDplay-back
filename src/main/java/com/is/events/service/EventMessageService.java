@@ -3,6 +3,7 @@ package com.is.events.service;
 import com.is.events.model.Event;
 import com.is.events.model.enums.EventMessageType;
 import com.is.events.model.enums.EventStatus;
+import com.is.events.model.chat.ChatMessageRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -62,7 +63,9 @@ public class EventMessageService {
         String accessTokenSystem = "SYSTEM";
         String refreshTokenSystem = "SYSTEM";
         
-        chatService.sendMessage(event.getEventId(), systemId, message, accessTokenSystem, refreshTokenSystem, language);
+        ChatMessageRequest chatRequest = new ChatMessageRequest();
+        chatRequest.setContent(message);
+        chatService.sendMessage(event.getEventId(), systemId, chatRequest, accessTokenSystem, refreshTokenSystem, language);
         log.info("Sent event message: {}", message);
     }
 

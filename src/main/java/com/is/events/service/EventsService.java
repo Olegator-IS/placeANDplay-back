@@ -40,9 +40,9 @@ import com.is.events.dto.EventStatusUpdateRequest;
 import com.is.events.service.EventMessageService;
 import com.is.events.dto.UserEventStatisticsDTO;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class EventsService {
 
     private final EventsRepository eventsRepository;

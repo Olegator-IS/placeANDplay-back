@@ -9,4 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ChatMessageRequest {
     private String content;
+    private Long quotedMessageId;
+    private String quotedMessageContent;
+    private String quotedMessageSender;
 } 

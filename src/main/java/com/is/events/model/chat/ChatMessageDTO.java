@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -19,5 +21,14 @@ public class ChatMessageDTO {
     private String content;
     private LocalDateTime sentAt;
     private String senderAvatarUrl;
-    private String type;
+    private MessageType type;
+    private Boolean isEdited;
+    private LocalDateTime editedAt;
+    private Boolean isDeleted;
+    private List<Long> readBy;
+    private Long parentMessageId;
+    private String parentMessageContent;
+    private String parentMessageSender;
+    private LocalDateTime parentMessageSentAt;
+    private Map<String, List<Long>> reactions;
 } 
