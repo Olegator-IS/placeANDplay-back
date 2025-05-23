@@ -38,6 +38,7 @@ import com.is.events.dto.EventCreationAvailabilityResponse;
 import com.is.events.dto.EventStatusUpdateRequest;
 
 import com.is.events.service.EventMessageService;
+import com.is.events.dto.UserEventStatisticsDTO;
 
 @Service
 @RequiredArgsConstructor
@@ -699,5 +700,22 @@ public class EventsService {
                 log.error("Error starting event {}: {}", event.getEventId(), e.getMessage());
             }
         });
+    }
+
+    public UserEventStatisticsDTO getUserEventStatistics(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new EventValidationException("user_not_found",
+                    returnTextToUserByLang("en", "user_not_found"));
+        }
+
+        int eventsAsParticipant = eventsRepository.countEventsWhereUserIsParticipant(userId);
+        int eventsAsOrganizer = eventsRepository.countEventsWhereUserIsOrganizer(userId);
+        int totalEvents = eventsRepository.countAllUserEvents(userId);
+
+        return UserEventStatisticsDTO.builder()
+                .totalEvents(totalEvents)
+                .eventsAsOrganizer(eventsAsOrganizer)
+                .eventsAsParticipant(eventsAsParticipant)
+                .build();
     }
 }

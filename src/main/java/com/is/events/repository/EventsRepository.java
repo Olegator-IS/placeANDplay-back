@@ -78,6 +78,36 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             """, nativeQuery = true)
     List<Event> findEventsByOrganizerAndDate(@Param("organizerId") Long organizerId, @Param("date") LocalDate date);
 
+    @Query(value = """
+            SELECT COUNT(DISTINCT e.*) FROM events.events e 
+            WHERE EXISTS (
+                SELECT 1 
+                FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                WHERE CAST((p->>'participantId') AS bigint) = :userId
+            )
+            AND CAST((e.organizer_event->>'organizerId') AS bigint) != :userId
+            """, nativeQuery = true)
+    int countEventsWhereUserIsParticipant(@Param("userId") Long userId);
+
+    @Query(value = """
+            SELECT COUNT(DISTINCT e.*) FROM events.events e 
+            WHERE CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+            """, nativeQuery = true)
+    int countEventsWhereUserIsOrganizer(@Param("userId") Long userId);
+
+    @Query(value = """
+            SELECT COUNT(DISTINCT e.*) FROM events.events e 
+            WHERE (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            """, nativeQuery = true)
+    int countAllUserEvents(@Param("userId") Long userId);
+
 //    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
     
 //    List<Event> findByStatusAndEndDateTimeBefore(String status, LocalDateTime dateTime);

@@ -1,7 +1,6 @@
 package com.is.events.api;
 
-import com.is.events.dto.EventDTO;
-import com.is.events.dto.EventAvailabilityDTO;
+import com.is.events.dto.*;
 import com.is.events.model.Event;
 import com.is.events.model.EventFilterDTO;
 import com.is.events.model.EventSpecification;
@@ -23,10 +22,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-
-import com.is.events.dto.JoinEventRequest;
-import com.is.events.dto.EventCreationAvailabilityResponse;
-import com.is.events.dto.EventStatusUpdateRequest;
 
 @RestController
 @RequestMapping("/api/v1/events")
@@ -226,5 +221,10 @@ public class EventsController {
             @PathVariable Long eventId,
             @RequestParam Long organizationId) {
         return ResponseEntity.ok(eventsService.cancelEvent(eventId, organizationId));
+    }
+
+    @GetMapping("/user-statistics/{userId}")
+    public ResponseEntity<UserEventStatisticsDTO> getUserEventStatistics(@PathVariable Long userId) {
+        return ResponseEntity.ok(eventsService.getUserEventStatistics(userId));
     }
 }
