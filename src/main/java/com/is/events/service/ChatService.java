@@ -51,8 +51,25 @@ public class ChatService {
             Sort.by(direction, "sentAt")
         );
         
-        return messageRepository.findByEventId(eventId, pageRequest)
-                .map(this::convertToDTO);
+        Page<EventMessage> messages = messageRepository.findByEventId(eventId, pageRequest);
+        
+        // Get all unique sender IDs
+        List<Long> senderIds = messages.getContent().stream()
+            .map(EventMessage::getSenderId)
+            .filter(id -> id != null && id != 0)
+            .distinct()
+            .collect(Collectors.toList());
+            
+        // Get profile pictures for all senders
+        Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(senderIds);
+        
+        return messages.map(message -> {
+            ChatMessageDTO dto = convertToDTO(message);
+            if (message.getSenderId() != null && message.getSenderId() != 0) {
+                dto.setSenderAvatarUrl(userAvatars.getOrDefault(message.getSenderId(), ""));
+            }
+            return dto;
+        });
     }
 
     public List<ChatMessageDTO> getLatestEventMessages(Long eventId, int limit,
@@ -61,11 +78,27 @@ public class ChatService {
         validateUserAccess(accessToken, refreshToken, lang);
         
         PageRequest pageRequest = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "sentAt"));
-        return messageRepository.findByEventId(eventId, pageRequest)
-                .getContent()
-                .stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        List<EventMessage> messages = messageRepository.findByEventId(eventId, pageRequest).getContent();
+        
+        // Get all unique sender IDs
+        List<Long> senderIds = messages.stream()
+            .map(EventMessage::getSenderId)
+            .filter(id -> id != null && id != 0)
+            .distinct()
+            .collect(Collectors.toList());
+            
+        // Get profile pictures for all senders
+        Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(senderIds);
+        
+        return messages.stream()
+            .map(message -> {
+                ChatMessageDTO dto = convertToDTO(message);
+                if (message.getSenderId() != null && message.getSenderId() != 0) {
+                    dto.setSenderAvatarUrl(userAvatars.getOrDefault(message.getSenderId(), ""));
+                }
+                return dto;
+            })
+            .collect(Collectors.toList());
     }
 
     private void validateUserAccess(String accessToken, String refreshToken, String lang) {
@@ -118,14 +151,17 @@ public class ChatService {
                 
                 String firstName = userInfo.get("firstName") != null ? userInfo.get("firstName").toString() : "";
                 String lastName = userInfo.get("lastName") != null ? userInfo.get("lastName").toString() : "";
-                String avatarUrl = userInfo.get("profile_picture_url") != null ? userInfo.get("profile_picture_url").toString() : "";
                 
                 userMessage.setSenderName(firstName + " " + lastName);
-                userMessage.setSenderAvatarUrl(avatarUrl);
             }
 
             EventMessage savedMessage = messageRepository.save(userMessage);
             ChatMessageDTO messageDTO = convertToDTO(savedMessage);
+            
+            // Get sender's profile picture
+            Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(List.of(userId));
+            messageDTO.setSenderAvatarUrl(userAvatars.getOrDefault(userId, ""));
+            
             messagingTemplate.convertAndSend("/topic/chat/" + eventId, messageDTO);
             return messageDTO;
 
@@ -143,7 +179,6 @@ public class ChatService {
                 .senderName(message.getSenderName())
                 .content(message.getContent() != null ? message.getContent() : message.getMessage())
                 .sentAt(message.getSentAt() != null ? message.getSentAt() : message.getTimestamp())
-                .senderAvatarUrl(message.getSenderAvatarUrl())
                 .type(message.getType())
                 .build();
     }

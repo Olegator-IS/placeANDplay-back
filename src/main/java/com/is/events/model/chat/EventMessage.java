@@ -34,9 +34,6 @@ public class EventMessage {
     @Column(name = "sent_at")
     private LocalDateTime sentAt;
 
-    @Column(name = "sender_avatar_url")
-    private String senderAvatarUrl;
-
     @Column(name = "message_type")
     private String type;
 

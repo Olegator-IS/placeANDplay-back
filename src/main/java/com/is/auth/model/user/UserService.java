@@ -790,6 +790,19 @@ public class UserService {
                 .body(new Response(500, "INTERNAL_SERVER_ERROR", "Error retrieving user profile"));
         }
     }
+
+    public Map<Long, String> getUsersProfilePicturesForChat(List<Long> userIds) {
+        Map<Long, String> userAvatars = new HashMap<>();
+        try {
+            List<UserAdditionalInfo> userInfos = userAdditionalInfoRepository.findAllById(userIds);
+            for (UserAdditionalInfo info : userInfos) {
+                userAvatars.put(info.getUserId(), info.getProfilePictureUrl() != null ? info.getProfilePictureUrl() : "");
+            }
+        } catch (Exception e) {
+            log.error("Error getting user profile pictures for chat: {}", e.getMessage());
+        }
+        return userAvatars;
+    }
 }
 
 
