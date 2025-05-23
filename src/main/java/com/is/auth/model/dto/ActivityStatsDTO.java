@@ -12,6 +12,6 @@ public class ActivityStatsDTO {
     private Integer eventsPlayed;
     private Integer eventsOrganized;
     
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime lastActive;
+//    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+//    private LocalDateTime lastActive;
 } 

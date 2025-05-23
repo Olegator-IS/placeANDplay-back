@@ -50,6 +50,8 @@ import java.util.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.SignatureException;
 import io.jsonwebtoken.MalformedJwtException;
+import com.is.events.service.EventsService;
+import com.is.events.dto.UserEventStatisticsDTO;
 
 @Service
 @Slf4j
@@ -73,6 +75,8 @@ public class UserService {
     private final UserActivityStatsRepository userActivityStatsRepository;
     private final UserReputationRepository userReputationRepository;
     private final ObjectMapper objectMapper;
+    @Autowired
+    private EventsService eventsService;
 
     @Autowired
     private Logger logger;
@@ -251,7 +255,7 @@ public class UserService {
         // Initialize activity stats
         UserActivityStats activityStats = new UserActivityStats();
         activityStats.setUserId(userId);
-        activityStats.setLastActive(LocalDateTime.now());
+//        activityStats.setLastActive(LocalDateTime.now());
         userActivityStatsRepository.save(activityStats);
 
         // Initialize reputation
@@ -421,15 +425,12 @@ public class UserService {
                 ));
             }
 
-            // Add activity stats
-            UserActivityStats activityStats = userActivityStatsRepository.findByUserId(user.getUserId());
-            if (activityStats != null) {
-                response.setActivityStats(ActivityStatsDTO.builder()
-                    .eventsPlayed(activityStats.getEventsPlayed())
-                    .eventsOrganized(activityStats.getEventsOrganized())
-                    .lastActive(activityStats.getLastActive())
-                    .build());
-            }
+            // Add activity stats from EventsService
+            UserEventStatisticsDTO stats = eventsService.getUserEventStatistics(user.getUserId());
+            response.setActivityStats(ActivityStatsDTO.builder()
+                .eventsPlayed(stats.getEventsAsParticipant())
+                .eventsOrganized(stats.getEventsAsOrganizer())
+                .build());
 
             // Add reputation
             UserReputation reputation = userReputationRepository.findByUserId(user.getUserId());
@@ -702,7 +703,7 @@ public class UserService {
             // Initialize activity stats
             UserActivityStats activityStats = new UserActivityStats();
             activityStats.setUserId(userAddInfo.getUserId());
-            activityStats.setLastActive(LocalDateTime.now());
+//            activityStats.setLastActive(LocalDateTime.now());
             userActivityStatsRepository.save(activityStats);
             log.info("Initialized activity stats for user ID: {}", userAddInfo.getUserId());
 
@@ -761,6 +762,32 @@ public class UserService {
             response.put("status", "error");
             response.put("message", "Internal server error");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    public ResponseEntity<Response> getUserProfile(Long userId, String language) {
+        try {
+            Optional<User> userOptional = userRepository.findById(userId);
+            if (userOptional.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new Response(404, "USER_NOT_FOUND", "User not found"));
+            }
+
+            User user = userOptional.get();
+            Optional<UserAdditionalInfo> userAddInfo = userAdditionalInfoRepository.findById(userId);
+            
+            Map<String, Object> userProfile = getStringObjectMap(user, userAddInfo);
+            
+            // Remove sensitive information
+            userProfile.remove("email");
+            userProfile.remove("isEmailVerified");
+            userProfile.remove("role");
+            
+            return ResponseEntity.ok(new Response(200, "OK", userProfile));
+        } catch (Exception e) {
+            log.error("Error getting user profile for userId: {}", userId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new Response(500, "INTERNAL_SERVER_ERROR", "Error retrieving user profile"));
         }
     }
 }

@@ -23,6 +23,6 @@ public class UserActivityStats {
     @Column(name = "events_organized")
     private Integer eventsOrganized = 0;
 
-    @Column(name = "last_active")
-    private LocalDateTime lastActive;
+//    @Column(name = "last_active")
+//    private LocalDateTime lastActive;
 } 
