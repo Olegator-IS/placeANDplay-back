@@ -52,20 +52,40 @@ public class ChatService {
         log.info("Found {} messages", messages.getTotalElements());
         
         // Get all unique sender IDs
-        // .map(EventMessage::getSenderId)
-        // .filter(id -> id != null && id != 0)
-        // .distinct()
-        // .collect(Collectors.toList());
+        List<Long> senderIds = messages.getContent().stream()
+            .map(EventMessage::getSenderId)
+            .filter(id -> id != null && id != 0)
+            .distinct()
+            .collect(Collectors.toList());
             
         // Get profile pictures for all senders
-        // Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(senderIds);
-        log.info("Retrieved {} user avatars", 0);
+        Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(senderIds);
+        log.info("Retrieved {} user avatars", userAvatars.size());
+        
+        // Get user names for all senders
+        Map<Long, String> userNames = new HashMap<>();
+        for (Long senderId : senderIds) {
+            try {
+                ResponseEntity<Response> userResponse = userService.getUserProfile(senderId, lang);
+                if (userResponse.getBody() != null && userResponse.getBody().getResult() != null) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> userInfo = (Map<String, Object>) userResponse.getBody().getResult();
+                    String firstName = userInfo.get("first_name") != null ? userInfo.get("first_name").toString() : "";
+                    String lastName = userInfo.get("last_name") != null ? userInfo.get("last_name").toString() : "";
+                    userNames.put(senderId, firstName + " " + lastName);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get user name for ID {}: {}", senderId, e.getMessage());
+                userNames.put(senderId, "User " + senderId);
+            }
+        }
         
         Page<ChatMessageDTO> result = messages.map(message -> {
             ChatMessageDTO dto = convertToDTO(message);
-            // if (message.getSenderId() != null && message.getSenderId() != 0) {
-            //     dto.setSenderAvatarUrl(userAvatars.getOrDefault(message.getSenderId(), ""));
-            // }
+            if (message.getSenderId() != null && message.getSenderId() != 0) {
+                dto.setSenderAvatarUrl(userAvatars.getOrDefault(message.getSenderId(), ""));
+                dto.setSenderName(userNames.getOrDefault(message.getSenderId(), "User " + message.getSenderId()));
+            }
             return dto;
         });
         
@@ -82,20 +102,40 @@ public class ChatService {
         List<EventMessage> messages = messageRepository.findByEventId(eventId, pageRequest).getContent();
         
         // Get all unique sender IDs
-        // .map(EventMessage::getSenderId)
-        // .filter(id -> id != null && id != 0)
-        // .distinct()
-        // .collect(Collectors.toList());
+        List<Long> senderIds = messages.stream()
+            .map(EventMessage::getSenderId)
+            .filter(id -> id != null && id != 0)
+            .distinct()
+            .collect(Collectors.toList());
             
         // Get profile pictures for all senders
-        // Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(senderIds);
+        Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(senderIds);
+        
+        // Get user names for all senders
+        Map<Long, String> userNames = new HashMap<>();
+        for (Long senderId : senderIds) {
+            try {
+                ResponseEntity<Response> userResponse = userService.getUserProfile(senderId, lang);
+                if (userResponse.getBody() != null && userResponse.getBody().getResult() != null) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> userInfo = (Map<String, Object>) userResponse.getBody().getResult();
+                    String firstName = userInfo.get("firstName") != null ? userInfo.get("firstName").toString() : "";
+                    String lastName = userInfo.get("lastName") != null ? userInfo.get("lastName").toString() : "";
+                    userNames.put(senderId, firstName + " " + lastName);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get user name for ID {}: {}", senderId, e.getMessage());
+                userNames.put(senderId, "User " + senderId);
+            }
+        }
         
         return messages.stream()
             .map(message -> {
                 ChatMessageDTO dto = convertToDTO(message);
-                // if (message.getSenderId() != null && message.getSenderId() != 0) {
-                //     dto.setSenderAvatarUrl(userAvatars.getOrDefault(message.getSenderId(), ""));
-                // }
+                if (message.getSenderId() != null && message.getSenderId() != 0) {
+                    dto.setSenderAvatarUrl(userAvatars.getOrDefault(message.getSenderId(), ""));
+                    dto.setSenderName(userNames.getOrDefault(message.getSenderId(), "User " + message.getSenderId()));
+                }
                 return dto;
             })
             .collect(Collectors.toList());

@@ -16,7 +16,8 @@ public class CacheConfig {
         cacheManager.setCacheNames(java.util.Arrays.asList(
             "userProfilePictures",
             "userProfiles",
-            "eventMessages"
+            "eventMessages",
+            "events"
         ));
         return cacheManager;
     }
