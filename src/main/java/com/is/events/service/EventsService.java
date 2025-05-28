@@ -56,11 +56,27 @@ public class EventsService {
 //    @Autowired
 //    private Logger logger;
 
-    @Cacheable(value = "events", key = "#placeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
-    public Page<EventDTO> getAllEvents(long placeId, Pageable pageable) {
-        log.info("Fetching events for placeId: {} with pagination: {}", placeId, pageable);
-        return eventsRepository.findAllByPlaceId(placeId, pageable)
+    @Cacheable(value = "events", key = "#placeId + '_' + #startDate + '_' + #endDate + '_' + #pageable.pageNumber + '_' + #pageable.pageSize + '_' + #pageable.sort")
+    public Page<EventDTO> getAllEvents(long placeId, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        log.info("Fetching events for placeId: {} with date range: {} to {}, pagination: {}", 
+            placeId, startDate, endDate, pageable);
+        
+        // Если даты не указаны, используем текущую дату и дату через месяц
+        if (startDate == null) {
+            startDate = LocalDate.now();
+        }
+        if (endDate == null) {
+            endDate = startDate.plusMonths(1);
+        }
+        
+        return eventsRepository.findEventsByPlaceAndDateRange(placeId, startDate, endDate, pageable)
                 .map(this::convertToDTO);
+    }
+
+    // Обновляем старый метод для обратной совместимости
+    @Cacheable(value = "events", key = "#placeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize + '_' + #pageable.sort")
+    public Page<EventDTO> getAllEvents(long placeId, Pageable pageable) {
+        return getAllEvents(placeId, LocalDate.now(), LocalDate.now().plusMonths(1), pageable);
     }
 
     @Cacheable(value = "eventsByCity", key = "#placeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
@@ -134,7 +150,7 @@ public class EventsService {
         }
 
         // Установка дополнительных полей
-        dto.setJoinable(event.getStatus() == EventStatus.PENDING_APPROVAL);
+        dto.setJoinable(event.getStatus() == EventStatus.PENDING_APPROVAL || event.getStatus() == EventStatus.CONFIRMED);
         dto.setMaxParticipants(event.getSportEvent().getMaxParticipants());
         dto.setEventType(event.getSportEvent().getSportType());
         dto.setLocation(event.getSportEvent().getLocation());

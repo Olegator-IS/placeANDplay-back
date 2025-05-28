@@ -108,6 +108,20 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             """, nativeQuery = true)
     int countAllUserEvents(@Param("userId") Long userId);
 
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE e.place_id = :placeId
+            AND DATE(e.date_time) BETWEEN :startDate AND :endDate
+            AND e.status NOT IN ('REJECTED', 'EXPIRED')
+            ORDER BY e.date_time DESC
+            """, nativeQuery = true)
+    Page<Event> findEventsByPlaceAndDateRange(
+        @Param("placeId") Long placeId,
+        @Param("startDate") LocalDate startDate,
+        @Param("endDate") LocalDate endDate,
+        Pageable pageable
+    );
+
 //    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
     
 //    List<Event> findByStatusAndEndDateTimeBefore(String status, LocalDateTime dateTime);

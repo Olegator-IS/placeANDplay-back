@@ -13,11 +13,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.format.annotation.DateTimeFormat;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
@@ -41,7 +43,23 @@ public class EventsController {
     }
 
     @GetMapping("/pagination")
-    public ResponseEntity<Page<Event>> getEvents(EventFilterDTO filter) {
+    @Operation(summary = "Get events with filtering and pagination")
+    public ResponseEntity<Page<EventDTO>> getEvents(
+            @RequestParam(required = false) Long placeId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "dateTime") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
+        
+        EventFilterDTO filter = new EventFilterDTO();
+        filter.setPlaceId(placeId != null ? placeId.toString() : null);
+        filter.setDate(date);
+        filter.setPage(page);
+        filter.setSize(size);
+        filter.setSortBy(sortBy);
+        filter.setSortDirection(sortDirection);
+
         // Создаем объект сортировки
         Sort sort = Sort.by(
                 filter.getSortDirection().equalsIgnoreCase("ASC") ?
@@ -62,21 +80,37 @@ public class EventsController {
                 pageRequest
         );
 
-        return ResponseEntity.ok(events);
+        return ResponseEntity.ok(events.map(eventsService::convertToDTO));
     }
 
-    @Operation(summary = "Получить все события с пагинацией")
-    @GetMapping
+    @GetMapping("/place/{placeId}")
+    @Operation(summary = "Get all events for a place with optional date filtering")
     public ResponseEntity<Page<EventDTO>> getAllEvents(
-            @RequestParam Long placeId,
+            @PathVariable Long placeId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "dateTime") String sortBy,
-            @RequestParam(defaultValue = "DESC") String sortDirection,
-            @RequestHeader(defaultValue = "ru") String language) {
-        Sort.Direction direction = Sort.Direction.fromString(sortDirection);
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(direction, sortBy));
-        return ResponseEntity.ok(eventsService.getAllEvents(placeId, pageRequest));
+            @RequestParam(defaultValue = "dateTime,desc") String[] sort) {
+        
+        List<Sort.Order> orders = new ArrayList<>();
+        if (sort[0].contains(",")) {
+            // will sort more than 2 fields
+            for (String sortOrder : sort) {
+                String[] _sort = sortOrder.split(",");
+                orders.add(new Sort.Order(
+                    _sort[1].equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC,
+                    _sort[0]));
+            }
+        } else {
+            // sort=[field, direction]
+            orders.add(new Sort.Order(
+                sort[1].equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC,
+                sort[0]));
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(orders));
+        return ResponseEntity.ok(eventsService.getAllEvents(placeId, startDate, endDate, pageable));
     }
 
     @Operation(summary = "Получить события по городу")

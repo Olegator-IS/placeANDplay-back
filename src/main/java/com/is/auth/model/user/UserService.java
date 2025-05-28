@@ -195,8 +195,8 @@ public class UserService {
         return listOfSportsRepository.findByLanguage(columnName);
     }
 
-    @Cacheable(value = "sports", key = "#language")
-    public String getAttrModelBySport(int sportId,String language) {
+    @Cacheable(value = "sportAttributeModels", key = "#sportId")
+    public String getAttrModelBySport(int sportId, String language) {
         return listOfSportsRepository.findBySportId(sportId);
     }
 

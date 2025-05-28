@@ -17,7 +17,12 @@ public class CacheConfig {
             "userProfilePictures",
             "userProfiles",
             "eventMessages",
-            "events"
+            "events",
+            "sports",
+            "skills",
+            "cities",
+            "countries",
+            "sportAttributeModels"
         ));
         return cacheManager;
     }

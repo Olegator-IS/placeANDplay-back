@@ -16,6 +16,9 @@ public class EventFilterDTO {
     @DateTimeFormat(pattern = "yyyy-MM-dd")
     private LocalDate dateTo;
 
+    @DateTimeFormat(pattern = "yyyy-MM-dd")
+    private LocalDate date;
+
     private String status;
     private String eventType;
     private Double priceMin;
@@ -30,10 +33,16 @@ public class EventFilterDTO {
     private String sortDirection = "DESC";
 
     public LocalDateTime getDateTimeFrom() {
+        if (date != null) {
+            return date.atStartOfDay();
+        }
         return dateFrom != null ? dateFrom.atStartOfDay() : null;
     }
 
     public LocalDateTime getDateTimeTo() {
+        if (date != null) {
+            return date.atTime(LocalTime.MAX);
+        }
         return dateTo != null ? dateTo.atTime(LocalTime.MAX) : null;
     }
 }
