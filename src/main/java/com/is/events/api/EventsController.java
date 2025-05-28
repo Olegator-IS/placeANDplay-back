@@ -261,4 +261,15 @@ public class EventsController {
     public ResponseEntity<UserEventStatisticsDTO> getUserEventStatistics(@PathVariable Long userId) {
         return ResponseEntity.ok(eventsService.getUserEventStatistics(userId));
     }
+
+    @GetMapping("/check-join-availability")
+    @Operation(summary = "Check if user can join an event on a specific date")
+    public ResponseEntity<EventJoinAvailabilityResponse> checkEventJoinAvailability(
+            @RequestParam Long userId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestHeader(defaultValue = "ru") String language) {
+        
+        log.info("Checking event join availability for user {} on date {}", userId, date);
+        return ResponseEntity.ok(eventsService.checkEventJoinAvailability(userId, date, language));
+    }
 }

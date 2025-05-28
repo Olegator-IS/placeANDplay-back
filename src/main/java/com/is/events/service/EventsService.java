@@ -39,6 +39,7 @@ import com.is.events.dto.EventStatusUpdateRequest;
 
 import com.is.events.service.EventMessageService;
 import com.is.events.dto.UserEventStatisticsDTO;
+import com.is.events.dto.EventJoinAvailabilityResponse;
 
 @Slf4j
 @Service
@@ -531,6 +532,14 @@ public class EventsService {
             case "uz_cannot_leave_before_start" -> "Tadbirni boshlanishiga 2 soatdan kam vaqt qolganda tark etish mumkin emas!";
             case "en_cannot_leave_before_start" -> "Cannot leave the event less than 2 hours before it starts.";
 
+            case "ru_too_many_events_per_day_for_joining" -> "Вы не можете присоединиться к более чем 3 событиям за день!";
+            case "uz_too_many_events_per_day_for_joining" -> "Bir kunda 3 tadan ortiq tadbirga qo'shila olmaysiz!";
+            case "en_too_many_events_per_day_for_joining" -> "You cannot join more than 3 events per day!";
+
+            case "ru_can_join_event" -> "Вы можете присоединиться к событию";
+            case "uz_can_join_event" -> "Tadbirga qo'shilishingiz mumkin";
+            case "en_can_join_event" -> "You can join the event";
+
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };
     }
@@ -585,32 +594,83 @@ public class EventsService {
     }
 
     public EventCreationAvailabilityResponse checkEventCreationAvailability(Long organizerId, LocalDate date, String lang) {
-        int eventCount = eventsRepository.countEventsByOrganizerAndDate(organizerId, date);
+        // Получаем количество событий по ролям
+        int eventsAsOrganizer = eventsRepository.countUserEventsAsOrganizerForDate(organizerId, date);
+        int eventsAsParticipant = eventsRepository.countUserEventsAsParticipantForDate(organizerId, date);
+        int uniqueEvents = eventsRepository.countUserEventsAsBothRolesForDate(organizerId, date);
         
-        if (eventCount >= 3) {
+        // Вычисляем общее количество уникальных событий
+        // Формула: organizer + participant - unique (чтобы не считать дважды события, где пользователь и организатор, и участник)
+        int totalEvents = eventsAsOrganizer + eventsAsParticipant - uniqueEvents;
+        
+        // Проверяем общее количество уникальных событий
+        if (totalEvents >= 3) {
             return EventCreationAvailabilityResponse.builder()
                     .available(false)
                     .message(returnTextToUserByLang(lang, "too_many_events_per_day"))
+                    .eventsAsOrganizer(eventsAsOrganizer)
+                    .eventsAsParticipant(eventsAsParticipant)
+                    .uniqueEvents(uniqueEvents)
+                    .totalEvents(totalEvents)
+                    .build();
+        }
+        
+        // Дополнительно проверяем количество событий как организатора
+        if (eventsAsOrganizer >= 3) {
+            return EventCreationAvailabilityResponse.builder()
+                    .available(false)
+                    .message(returnTextToUserByLang(lang, "too_many_events_per_day"))
+                    .eventsAsOrganizer(eventsAsOrganizer)
+                    .eventsAsParticipant(eventsAsParticipant)
+                    .uniqueEvents(uniqueEvents)
+                    .totalEvents(totalEvents)
                     .build();
         }
         
         return EventCreationAvailabilityResponse.builder()
                 .available(true)
                 .message(returnTextToUserByLang(lang, "can_create_event"))
+                .eventsAsOrganizer(eventsAsOrganizer)
+                .eventsAsParticipant(eventsAsParticipant)
+                .uniqueEvents(uniqueEvents)
+                .totalEvents(totalEvents)
                 .build();
     }
 
     public EventCreationAvailabilityResponse checkEventTimeAvailability(Long organizerId, LocalDate date, LocalDateTime proposedTime, String lang) {
-        // First check the daily limit
-        int eventCount = eventsRepository.countEventsByOrganizerAndDate(organizerId, date);
-        if (eventCount >= 3) {
+        // Получаем количество событий по ролям
+        int eventsAsOrganizer = eventsRepository.countUserEventsAsOrganizerForDate(organizerId, date);
+        int eventsAsParticipant = eventsRepository.countUserEventsAsParticipantForDate(organizerId, date);
+        int uniqueEvents = eventsRepository.countUserEventsAsBothRolesForDate(organizerId, date);
+        
+        // Вычисляем общее количество уникальных событий
+        int totalEvents = eventsAsOrganizer + eventsAsParticipant - uniqueEvents;
+
+        // Проверяем общее количество уникальных событий
+        if (totalEvents >= 3) {
             return EventCreationAvailabilityResponse.builder()
                     .available(false)
                     .message(returnTextToUserByLang(lang, "too_many_events_per_day"))
+                    .eventsAsOrganizer(eventsAsOrganizer)
+                    .eventsAsParticipant(eventsAsParticipant)
+                    .uniqueEvents(uniqueEvents)
+                    .totalEvents(totalEvents)
                     .build();
         }
 
-        // Then check time conflicts
+        // Дополнительно проверяем количество событий как организатора
+        if (eventsAsOrganizer >= 3) {
+            return EventCreationAvailabilityResponse.builder()
+                    .available(false)
+                    .message(returnTextToUserByLang(lang, "too_many_events_per_day"))
+                    .eventsAsOrganizer(eventsAsOrganizer)
+                    .eventsAsParticipant(eventsAsParticipant)
+                    .uniqueEvents(uniqueEvents)
+                    .totalEvents(totalEvents)
+                    .build();
+        }
+
+        // Проверяем временные конфликты
         List<Event> existingEvents = eventsRepository.findEventsByOrganizerAndDate(organizerId, date);
         for (Event event : existingEvents) {
             Duration timeDifference = Duration.between(event.getDateTime(), proposedTime).abs();
@@ -618,6 +678,10 @@ public class EventsService {
                 return EventCreationAvailabilityResponse.builder()
                         .available(false)
                         .message(returnTextToUserByLang(lang, "time_too_close"))
+                        .eventsAsOrganizer(eventsAsOrganizer)
+                        .eventsAsParticipant(eventsAsParticipant)
+                        .uniqueEvents(uniqueEvents)
+                        .totalEvents(totalEvents)
                         .build();
             }
         }
@@ -625,6 +689,10 @@ public class EventsService {
         return EventCreationAvailabilityResponse.builder()
                 .available(true)
                 .message(returnTextToUserByLang(lang, "can_create_event"))
+                .eventsAsOrganizer(eventsAsOrganizer)
+                .eventsAsParticipant(eventsAsParticipant)
+                .uniqueEvents(uniqueEvents)
+                .totalEvents(totalEvents)
                 .build();
     }
 
@@ -732,6 +800,36 @@ public class EventsService {
                 .totalEvents(totalEvents)
                 .eventsAsOrganizer(eventsAsOrganizer)
                 .eventsAsParticipant(eventsAsParticipant)
+                .build();
+    }
+
+    public EventJoinAvailabilityResponse checkEventJoinAvailability(Long userId, LocalDate date, String lang) {
+        // Получаем количество событий по ролям
+        int eventsAsOrganizer = eventsRepository.countUserEventsAsOrganizerForDate(userId, date);
+        int eventsAsParticipant = eventsRepository.countUserEventsAsParticipantForDate(userId, date);
+        int uniqueEvents = eventsRepository.countUserEventsAsBothRolesForDate(userId, date);
+        
+        // Вычисляем общее количество уникальных событий
+        int totalEvents = eventsAsOrganizer + eventsAsParticipant - uniqueEvents;
+        
+        if (totalEvents >= 3) {
+            return EventJoinAvailabilityResponse.builder()
+                    .available(false)
+                    .message(returnTextToUserByLang(lang, "too_many_events_per_day_for_joining"))
+                    .eventsAsOrganizer(eventsAsOrganizer)
+                    .eventsAsParticipant(eventsAsParticipant)
+                    .uniqueEvents(uniqueEvents)
+                    .totalEvents(totalEvents)
+                    .build();
+        }
+        
+        return EventJoinAvailabilityResponse.builder()
+                .available(true)
+                .message(returnTextToUserByLang(lang, "can_join_event"))
+                .eventsAsOrganizer(eventsAsOrganizer)
+                .eventsAsParticipant(eventsAsParticipant)
+                .uniqueEvents(uniqueEvents)
+                .totalEvents(totalEvents)
                 .build();
     }
 }

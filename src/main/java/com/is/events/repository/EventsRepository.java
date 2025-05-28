@@ -122,6 +122,42 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
         Pageable pageable
     );
 
+    @Query(value = """
+            SELECT COUNT(DISTINCT e.event_id) 
+            FROM events.events e 
+            WHERE CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+            AND DATE(e.date_time) = :date
+            AND e.status NOT IN ('REJECTED', 'EXPIRED', 'CANCELLED', 'COMPLETED')
+            """, nativeQuery = true)
+    int countUserEventsAsOrganizerForDate(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+    @Query(value = """
+            SELECT COUNT(DISTINCT e.event_id) 
+            FROM events.events e 
+            WHERE EXISTS (
+                SELECT 1 
+                FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                WHERE CAST((p->>'participantId') AS bigint) = :userId
+            )
+            AND DATE(e.date_time) = :date
+            AND e.status NOT IN ('REJECTED', 'EXPIRED', 'CANCELLED', 'COMPLETED')
+            """, nativeQuery = true)
+    int countUserEventsAsParticipantForDate(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+    @Query(value = """
+            SELECT COUNT(DISTINCT e.event_id) 
+            FROM events.events e 
+            WHERE CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+            AND EXISTS (
+                SELECT 1 
+                FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                WHERE CAST((p->>'participantId') AS bigint) = :userId
+            )
+            AND DATE(e.date_time) = :date
+            AND e.status NOT IN ('REJECTED', 'EXPIRED', 'CANCELLED', 'COMPLETED')
+            """, nativeQuery = true)
+    int countUserEventsAsBothRolesForDate(@Param("userId") Long userId, @Param("date") LocalDate date);
+
 //    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
     
 //    List<Event> findByStatusAndEndDateTimeBefore(String status, LocalDateTime dateTime);
