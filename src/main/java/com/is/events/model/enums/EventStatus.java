@@ -32,7 +32,8 @@ public enum EventStatus {
             case PENDING_APPROVAL -> EnumSet.of(
                 CONFIRMED,
                 REJECTED,
-                CHANGES_REQUESTED
+                CHANGES_REQUESTED,
+                CANCELLED
             );
             case CHANGES_REQUESTED -> EnumSet.of(
                 PENDING_APPROVAL, // После внесения изменений организатором
