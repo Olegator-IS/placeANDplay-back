@@ -234,7 +234,8 @@ public class EventsService {
 
         } catch (Exception e) {
             log.error("Error while adding participant to event: {}", eventId, e);
-            throw new RuntimeException("Error while adding participant: " + e.getMessage());
+            throw new EventValidationException("join_error",
+                    returnTextToUserByLang(lang, "join_error"));
         }
     }
 
@@ -346,7 +347,8 @@ public class EventsService {
             throw e;
         } catch (Exception e) {
             log.error("Error while removing participant from event: {}", eventId, e);
-            throw new RuntimeException("Error while removing participant: " + e.getMessage());
+            throw new EventValidationException("leave_error",
+                    returnTextToUserByLang(lang, "leave_error"));
         }
     }
 
@@ -539,6 +541,14 @@ public class EventsService {
             case "ru_can_join_event" -> "Вы можете присоединиться к событию";
             case "uz_can_join_event" -> "Tadbirga qo'shilishingiz mumkin";
             case "en_can_join_event" -> "You can join the event";
+
+            case "ru_join_error" -> "Ошибка при присоединении к событию";
+            case "uz_join_error" -> "Tadbirga qo'shilishda xatolik yuz berdi";
+            case "en_join_error" -> "Error while joining the event";
+
+            case "ru_leave_error" -> "Ошибка при выходе из события";
+            case "uz_leave_error" -> "Tadbirlar tark etilganda xatolik yuz berdi";
+            case "en_leave_error" -> "Error while leaving the event";
 
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };

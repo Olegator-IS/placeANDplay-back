@@ -1,0 +1,265 @@
+package com.is.friendship.service;
+
+import com.is.auth.model.user.User;
+import com.is.auth.model.user.UserAdditionalInfo;
+import com.is.auth.repository.UserRepository;
+import com.is.auth.repository.UserAdditionalInfoRepository;
+import com.is.friendship.dto.FriendshipListResponse;
+import com.is.friendship.dto.FriendshipRequest;
+import com.is.friendship.dto.FriendshipResponse;
+import com.is.friendship.exception.FriendshipException;
+import com.is.friendship.model.Friendship;
+import com.is.friendship.model.enums.FriendshipStatus;
+import com.is.friendship.repository.FriendshipRepository;
+import com.is.friendship.service.websocket.FriendshipWebSocketService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class FriendshipService {
+
+    private final FriendshipRepository friendshipRepository;
+    private final UserRepository userRepository;
+    private final UserAdditionalInfoRepository userAdditionalInfoRepository;
+    private final FriendshipWebSocketService webSocketService;
+
+    @Transactional
+    public FriendshipResponse sendFriendRequest(Long currentId, Long friendId) {
+        User currentUser = userRepository.findById(currentId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+        
+        User friend = userRepository.findById(friendId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.FRIEND_NOT_FOUND));
+
+        if (currentId.equals(friendId)) {
+            throw new FriendshipException(FriendshipException.ErrorType.INVALID_OPERATION, "Cannot send friend request to yourself");
+        }
+
+        // Проверяем существующую дружбу
+        Optional<Friendship> existingFriendship = friendshipRepository.findByUsers(currentUser, friend);
+        
+        if (existingFriendship.isPresent()) {
+            Friendship friendship = existingFriendship.get();
+            // Если дружба уже существует и не отклонена, выбрасываем исключение
+            if (friendship.getStatus() != FriendshipStatus.REJECTED) {
+                throw new FriendshipException(FriendshipException.ErrorType.FRIENDSHIP_ALREADY_EXISTS);
+            }
+            // Если дружба была отклонена, удаляем её
+            friendshipRepository.delete(friendship);
+        }
+
+        // Check if friend has blocked the current user
+        if (friendshipRepository.existsByUsersAndStatus(friend, currentUser, FriendshipStatus.BLOCKED)) {
+            throw new FriendshipException(FriendshipException.ErrorType.USER_BLOCKED);
+        }
+
+        // Создаем новую дружбу
+        Friendship friendship = Friendship.builder()
+            .user1(currentUser)
+            .user2(friend)
+            .initiator(currentUser)
+            .status(FriendshipStatus.PENDING)
+            .build();
+
+        friendship = friendshipRepository.save(friendship);
+        webSocketService.sendFriendRequestNotification(friendship);
+
+        return convertToResponse(friendship);
+    }
+
+    @Transactional
+    public FriendshipResponse acceptFriendRequest(Long userId, Long friendshipId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        Friendship friendship = friendshipRepository.findById(friendshipId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.FRIENDSHIP_NOT_FOUND));
+
+        if (!friendship.getUser2().equals(user)) {
+            throw new FriendshipException(FriendshipException.ErrorType.NOT_AUTHORIZED);
+        }
+
+        if (friendship.getStatus() != FriendshipStatus.PENDING) {
+            throw new FriendshipException(FriendshipException.ErrorType.FRIENDSHIP_NOT_PENDING);
+        }
+
+        friendship.setStatus(FriendshipStatus.ACCEPTED);
+        friendship = friendshipRepository.save(friendship);
+        webSocketService.sendFriendRequestAcceptedNotification(friendship);
+
+        return convertToResponse(friendship);
+    }
+
+    @Transactional
+    public FriendshipResponse rejectFriendRequest(Long userId, Long friendshipId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        Friendship friendship = friendshipRepository.findById(friendshipId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.FRIENDSHIP_NOT_FOUND));
+
+        if (!friendship.getUser2().equals(user)) {
+            throw new FriendshipException(FriendshipException.ErrorType.NOT_AUTHORIZED);
+        }
+
+        if (friendship.getStatus() != FriendshipStatus.PENDING) {
+            throw new FriendshipException(FriendshipException.ErrorType.FRIENDSHIP_NOT_PENDING);
+        }
+
+        friendship.setStatus(FriendshipStatus.REJECTED);
+        friendship = friendshipRepository.save(friendship);
+        webSocketService.sendFriendRequestRejectedNotification(friendship);
+
+        return convertToResponse(friendship);
+    }
+
+    @Transactional
+    public FriendshipResponse blockUser(Long userId, Long userToBlockId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+        
+        User userToBlock = userRepository.findById(userToBlockId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        if (userId.equals(userToBlockId)) {
+            throw new FriendshipException(FriendshipException.ErrorType.INVALID_OPERATION, "Cannot block yourself");
+        }
+
+        Friendship friendship = friendshipRepository.findByUsers(user, userToBlock)
+            .orElseGet(() -> Friendship.builder()
+                .user1(user)
+                .user2(userToBlock)
+                .initiator(user)
+                .build());
+
+        friendship.setStatus(FriendshipStatus.BLOCKED);
+        friendship = friendshipRepository.save(friendship);
+        webSocketService.sendUserBlockedNotification(friendship);
+
+        return convertToResponse(friendship);
+    }
+
+    @Transactional
+    public FriendshipResponse unblockUser(Long userId, Long blockedUserId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        Friendship friendship = friendshipRepository.findByUsersAndStatus(
+                user,
+                userRepository.findById(blockedUserId)
+                    .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND)),
+                FriendshipStatus.BLOCKED)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.BLOCKED_FRIENDSHIP_NOT_FOUND));
+
+        friendshipRepository.delete(friendship);
+        webSocketService.sendUserUnblockedNotification(friendship);
+
+        return convertToResponse(friendship);
+    }
+
+    @Transactional
+    public void removeFriend(Long userId, Long friendId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+        
+        User friend = userRepository.findById(friendId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.FRIEND_NOT_FOUND));
+
+        Friendship friendship = friendshipRepository.findByUsersAndStatus(user, friend, FriendshipStatus.ACCEPTED)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.FRIENDSHIP_NOT_FOUND));
+
+        friendshipRepository.delete(friendship);
+        webSocketService.sendFriendRemovedNotification(friendship);
+    }
+
+    public FriendshipListResponse getFriends(Long userId, Pageable pageable) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        Page<Friendship> friendships = friendshipRepository.findByUserAndStatus(user, FriendshipStatus.ACCEPTED, pageable);
+        List<FriendshipResponse> responses = friendships.getContent().stream()
+            .map(this::convertToResponse)
+            .collect(Collectors.toList());
+
+        return FriendshipListResponse.builder()
+            .friendships(responses)
+            .totalCount(friendships.getTotalElements())
+            .build();
+    }
+
+    public FriendshipListResponse getIncomingRequests(Long userId, Pageable pageable) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        // Ищем запросы, где пользователь является получателем (user2)
+        Page<Friendship> friendships = friendshipRepository.findIncomingRequests(user, FriendshipStatus.PENDING, pageable);
+        List<FriendshipResponse> responses = friendships.getContent().stream()
+            .map(this::convertToResponse)
+            .collect(Collectors.toList());
+
+        return FriendshipListResponse.builder()
+            .friendships(responses)
+            .totalCount(friendships.getTotalElements())
+            .build();
+    }
+
+    public FriendshipListResponse getOutgoingRequests(Long userId, Pageable pageable) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        // Ищем запросы, где пользователь является инициатором
+        Page<Friendship> friendships = friendshipRepository.findByInitiatorAndStatus(user, FriendshipStatus.PENDING, pageable);
+        List<FriendshipResponse> responses = friendships.getContent().stream()
+            .map(this::convertToResponse)
+            .collect(Collectors.toList());
+
+        return FriendshipListResponse.builder()
+            .friendships(responses)
+            .totalCount(friendships.getTotalElements())
+            .build();
+    }
+
+    public FriendshipListResponse getBlockedUsers(Long userId, Pageable pageable) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
+
+        Page<Friendship> friendships = friendshipRepository.findByUserAndStatus(user, FriendshipStatus.BLOCKED, pageable);
+        List<FriendshipResponse> responses = friendships.getContent().stream()
+            .map(this::convertToResponse)
+            .collect(Collectors.toList());
+
+        return FriendshipListResponse.builder()
+            .friendships(responses)
+            .totalCount(friendships.getTotalElements())
+            .build();
+    }
+
+    private FriendshipResponse convertToResponse(Friendship friendship) {
+        User currentUser = friendship.getUser1();
+        User otherUser = friendship.getUser2();
+        UserAdditionalInfo otherUserInfo = userAdditionalInfoRepository.findById(otherUser.getUserId())
+            .orElse(new UserAdditionalInfo());
+            
+        return FriendshipResponse.builder()
+            .id(friendship.getId())
+            .userId(currentUser.getUserId())
+            .friendId(otherUser.getUserId())
+            .firstName(otherUser.getFirstName())
+            .lastName(otherUser.getLastName())
+            .profilePictureUrl(otherUserInfo.getProfilePictureUrl())
+            .status(friendship.getStatus())
+            .createdAt(friendship.getCreatedAt())
+            .updatedAt(friendship.getUpdatedAt())
+            .build();
+    }
+} 

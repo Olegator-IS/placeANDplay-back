@@ -1,0 +1,11 @@
+package com.is.events.dto.friendship;
+
+import lombok.Data;
+
+import javax.validation.constraints.NotNull;
+
+@Data
+public class FriendshipRequest {
+    @NotNull(message = "Friend ID is required")
+    private Long friendId;
+} 

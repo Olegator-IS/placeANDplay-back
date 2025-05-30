@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.time.LocalDateTime;
 
-@ControllerAdvice
+@ControllerAdvice(basePackages = {"com.is.events.api", "com.is.events.service"})
 public class EventExceptionHandler {
 
     @ExceptionHandler(EventValidationException.class)
