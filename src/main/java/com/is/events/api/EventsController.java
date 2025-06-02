@@ -4,9 +4,11 @@ import com.is.events.dto.*;
 import com.is.events.model.Event;
 import com.is.events.model.EventFilterDTO;
 import com.is.events.model.EventSpecification;
+import com.is.events.model.enums.EventStatus;
 import com.is.events.service.EventsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
@@ -271,5 +274,39 @@ public class EventsController {
         
         log.info("Checking event join availability for user {} on date {}", userId, date);
         return ResponseEntity.ok(eventsService.checkEventJoinAvailability(userId, date, language));
+    }
+
+    @GetMapping("/organization/{placeId}/events")
+    @Operation(summary = "Get organization events with status filtering")
+    @ApiResponse(responseCode = "200", description = "Events retrieved successfully")
+    public ResponseEntity<Page<EventDTO>> getOrganizationEvents(
+            @PathVariable Long placeId,
+            @RequestParam(required = false) List<EventStatus> statuses,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "dateTime,desc") String[] sort) {
+        
+        log.info("Received request for organization events. PlaceId: {}, Statuses: {}, Page: {}, Size: {}, Sort: {}", 
+            placeId, statuses, page, size, Arrays.toString(sort));
+
+        List<Sort.Order> orders = new ArrayList<>();
+        if (sort[0].contains(",")) {
+            for (String sortOrder : sort) {
+                String[] _sort = sortOrder.split(",");
+                orders.add(new Sort.Order(
+                    _sort[1].equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC,
+                    _sort[0]));
+            }
+        } else {
+            orders.add(new Sort.Order(
+                sort[1].equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC,
+                sort[0]));
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(orders));
+        
+        Page<EventDTO> events = eventsService.getOrganizationEvents(placeId, statuses, pageable);
+        
+        return ResponseEntity.ok(events);
     }
 }

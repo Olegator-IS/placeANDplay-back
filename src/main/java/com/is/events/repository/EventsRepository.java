@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Repository
 public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecificationExecutor<Event> {
@@ -157,6 +158,17 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             AND e.status NOT IN ('REJECTED', 'EXPIRED', 'CANCELLED', 'COMPLETED')
             """, nativeQuery = true)
     int countUserEventsAsBothRolesForDate(@Param("userId") Long userId, @Param("date") LocalDate date);
+
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE e.place_id = :placeId
+            AND (:statuses IS NULL OR e.status = ANY(:statuses))
+            """, nativeQuery = true)
+    Page<Event> findOrganizationEventsByStatus(
+        @Param("placeId") Long placeId,
+        @Param("statuses") String[] statuses,
+        Pageable pageable
+    );
 
 //    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
     

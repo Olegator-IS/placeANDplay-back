@@ -22,7 +22,8 @@ public class CacheConfig {
             "skills",
             "cities",
             "countries",
-            "sportAttributeModels"
+            "sportAttributeModels",
+            "organizationEvents"
         ));
         return cacheManager;
     }

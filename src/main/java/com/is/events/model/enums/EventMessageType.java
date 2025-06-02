@@ -5,5 +5,6 @@ public enum EventMessageType {
     STATUS_CHANGED,
     PARTICIPANT_JOINED,
     PARTICIPANT_LEFT,
-    EVENT_STARTED
+    EVENT_STARTED,
+    EVENT_EXPIRED
 } 

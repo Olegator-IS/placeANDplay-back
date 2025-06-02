@@ -45,6 +45,11 @@ public class EventMessageService {
                     );
                 }
             }
+
+            case EVENT_EXPIRED -> String.format(
+                    "Событие было переведено в просроченные,т.к организатор не ответил на это событие.",
+                    participantName
+            );
             
             case PARTICIPANT_JOINED -> String.format(
                 "%s присоединился к ивенту.",

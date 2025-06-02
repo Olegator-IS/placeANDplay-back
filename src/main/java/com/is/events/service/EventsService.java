@@ -842,4 +842,30 @@ public class EventsService {
                 .totalEvents(totalEvents)
                 .build();
     }
+
+    public Page<EventDTO> getOrganizationEvents(
+            Long placeId,
+            List<EventStatus> statuses,
+            Pageable pageable) {
+        
+        log.info("Fetching organization events for placeId: {} with statuses: {}, pagination: {}", 
+            placeId, statuses, pageable);
+
+        // Преобразуем список статусов в массив строк
+        String[] statusArray = statuses != null && !statuses.isEmpty() 
+            ? statuses.stream()
+                .map(EventStatus::name)
+                .toArray(String[]::new)
+            : null;
+
+        return eventsRepository.findOrganizationEventsByStatus(placeId, statusArray, pageable)
+                .map(this::convertToDTO);
+    }
+
+    private boolean isValidOrganizationEventStatus(EventStatus status) {
+        return switch (status) {
+            case REJECTED, CONFIRMED, CHANGES_REQUESTED, IN_PROGRESS, COMPLETED, EXPIRED -> true;
+            default -> false;
+        };
+    }
 }

@@ -1,8 +1,11 @@
 package com.is.events.scheduler;
 
 import com.is.events.model.Event;
+import com.is.events.model.enums.EventMessageType;
 import com.is.events.model.enums.EventStatus;
 import com.is.events.repository.EventsRepository;
+import com.is.events.service.WebSocketService;
+import com.is.events.service.EventMessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,6 +21,8 @@ import java.util.List;
 public class EventScheduler {
 
     private final EventsRepository eventsRepository;
+    private final WebSocketService webSocketService;
+    private final EventMessageService eventMessageService;
 
     @Scheduled(fixedRate = 600000) // 600000 ms = 10 минут
     @Transactional
@@ -34,7 +39,15 @@ public class EventScheduler {
                         if (event.getStatus() == EventStatus.PENDING_APPROVAL ||
                             event.getStatus() == EventStatus.CHANGES_REQUESTED) {
                             event.forceExpire(); // Новый метод для принудительного перевода в EXPIRED
-                            eventsRepository.save(event);
+                            Event savedEvent = eventsRepository.save(event);
+                            
+                            // Отправляем системное сообщение о просрочке события
+                            eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_EXPIRED, null, "ru");
+                            
+                            // Отправляем уведомление через WebSocket
+                            webSocketService.notifyEventUpdate(event.getPlaceId());
+                            webSocketService.sendEventUpdate(savedEvent);
+                            
                             log.info("Event {} expired due to time", event.getEventId());
                         }
                     }
