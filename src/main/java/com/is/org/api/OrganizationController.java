@@ -65,4 +65,31 @@ public class OrganizationController {
         log.info("Received request for organization info with access token");
         return organizationService.orgInfo(accessToken, refreshToken);
     }
+
+    @GetMapping("/validateToken")
+    @ApiOperation(value = "Validate organization tokens", notes = "Validates access and refresh tokens for organization, returns same tokens if valid or new tokens if refresh needed")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Tokens are valid"),
+        @ApiResponse(code = 401, message = "Tokens are invalid or expired"),
+        @ApiResponse(code = 500, message = "Internal server error")
+    })
+    public ResponseEntity<?> validateToken(
+            @RequestHeader String accessToken,
+            @RequestHeader String refreshToken) {
+        log.info("Received token validation request for organization");
+        return organizationService.validateToken(accessToken, refreshToken);
+    }
+
+    @PostMapping("/refreshToken")
+    @ApiOperation(value = "Refresh organization tokens", notes = "Refreshes organization tokens using refresh token")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Tokens successfully refreshed"),
+        @ApiResponse(code = 401, message = "Invalid refresh token"),
+        @ApiResponse(code = 500, message = "Internal server error")
+    })
+    public ResponseEntity<?> refreshToken(
+            @RequestHeader String refreshToken) {
+        log.info("Received token refresh request for organization");
+        return organizationService.refreshToken(refreshToken);
+    }
 }

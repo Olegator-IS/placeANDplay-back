@@ -28,6 +28,8 @@ import javax.crypto.SecretKey;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.HashMap;
+import io.jsonwebtoken.ExpiredJwtException;
 
 @Service
 @RequiredArgsConstructor
@@ -228,5 +230,84 @@ public class OrganizationService {
 
     public Organizations getOrganizationById(Long orgId) {
         return organizationRepository.findById(orgId).orElse(null);
+    }
+
+    public ResponseEntity<?> validateToken(String accessToken, String refreshToken) {
+        try {
+            // First try to validate the access token
+            String decryptedToken = TokenSecurity.decryptToken(accessToken, secretKey);
+            Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
+
+            if (claims.getSubject() != null) {
+                OrganizationAccounts account = organizationAccountRepository.findByEmail(claims.getSubject());
+                if (account == null) {
+                    log.warn("No organization account found for email: {}", claims.getSubject());
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(new Response(401, "INVALID_TOKENS", "Organization not found"));
+                }
+
+                // If validation is successful, return the same tokens
+                Map<String, Object> tokenInfo = new HashMap<>();
+                tokenInfo.put("accessToken", accessToken);
+                tokenInfo.put("refreshToken", refreshToken);
+                
+                Response response = new Response(200, "OK", "Tokens are valid");
+                response.setTokenInfo(tokenInfo);
+                return ResponseEntity.ok(response);
+            }
+
+            // If access token validation fails, try to refresh using refresh token
+            return refreshToken(refreshToken);
+
+        } catch (ExpiredJwtException e) {
+            log.warn("Access token expired: {}", accessToken);
+            // Try to refresh using refresh token
+            return refreshToken(refreshToken);
+        } catch (Exception e) {
+            log.error("Error during token validation: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new Response(500, "TOKEN_VALIDATION_ERROR", "Error during token validation"));
+        }
+    }
+
+    public ResponseEntity<?> refreshToken(String refreshToken) {
+        try {
+            String decryptedToken = TokenSecurity.decryptToken(refreshToken, secretKey);
+            Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
+            
+            if (claims.getSubject() == null) {
+                log.warn("Empty subject in refresh token");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new Response(401, "INVALID_REFRESH_TOKEN", "Invalid refresh token"));
+            }
+
+            OrganizationAccounts account = organizationAccountRepository.findByEmail(claims.getSubject());
+            if (account == null) {
+                log.warn("No organization account found for email: {}", claims.getSubject());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new Response(401, "INVALID_REFRESH_TOKEN", "Organization not found"));
+            }
+
+            // Generate new tokens
+            String newAccessToken = jwtAuthenticationFilter.generateTokenForOrg(account.getEmail(), "ORGANIZATION");
+            String newRefreshToken = jwtAuthenticationFilter.generateRefreshTokenForOrg(account.getEmail(), "ORGANIZATION");
+
+            Map<String, Object> tokenInfo = new HashMap<>();
+            tokenInfo.put("accessToken", TokenSecurity.encryptToken(newAccessToken, secretKey));
+            tokenInfo.put("refreshToken", TokenSecurity.encryptToken(newRefreshToken, secretKey));
+
+            Response response = new Response(200, "OK", "Tokens refreshed successfully");
+            response.setTokenInfo(tokenInfo);
+            return ResponseEntity.ok(response);
+
+        } catch (ExpiredJwtException e) {
+            log.warn("Refresh token expired: {}", refreshToken);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new Response(401, "REFRESH_TOKEN_EXPIRED", "Refresh token has expired"));
+        } catch (Exception e) {
+            log.error("Error during token refresh: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new Response(500, "TOKEN_REFRESH_ERROR", "Error during token refresh"));
+        }
     }
 }
