@@ -1,11 +1,14 @@
 package com.is.events.scheduler;
 
+import com.is.auth.service.EmailService;
 import com.is.events.model.Event;
 import com.is.events.model.enums.EventMessageType;
 import com.is.events.model.enums.EventStatus;
 import com.is.events.repository.EventsRepository;
 import com.is.events.service.WebSocketService;
 import com.is.events.service.EventMessageService;
+import com.is.places.model.Place;
+import com.is.places.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,6 +26,8 @@ public class EventScheduler {
     private final EventsRepository eventsRepository;
     private final WebSocketService webSocketService;
     private final EventMessageService eventMessageService;
+    private final PlaceRepository placeRepository;
+    private final EmailService emailService;
 
     @Scheduled(fixedRate = 600000) // 600000 ms = 10 минут
     @Transactional
@@ -47,6 +52,11 @@ public class EventScheduler {
                             // Отправляем уведомление через WebSocket
                             webSocketService.notifyEventUpdate(event.getPlaceId());
                             webSocketService.sendEventUpdate(savedEvent);
+
+                            Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+
+
+                            emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
                             
                             log.info("Event {} expired due to time", event.getEventId());
                         }

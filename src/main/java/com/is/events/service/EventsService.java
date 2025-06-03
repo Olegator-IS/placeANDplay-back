@@ -1,5 +1,6 @@
 package com.is.events.service;
 
+import com.is.auth.service.EmailService;
 import com.is.events.dto.EventDTO;
 import com.is.events.dto.OrganizerDTO;
 import com.is.events.dto.ParticipantDTO;
@@ -13,6 +14,8 @@ import com.is.events.model.enums.EventMessageType;
 import com.is.events.repository.EventsRepository;
 import com.is.events.repository.UserActivityTrackingRepository;
 import com.is.auth.repository.UserRepository;
+import com.is.places.model.Place;
+import com.is.places.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
@@ -53,6 +56,8 @@ public class EventsService {
     private final WebSocketService webSocketService;
     private final UserRepository userRepository;
     private final EventMessageService eventMessageService;
+    private final EmailService emailService;
+    private final PlaceRepository placeRepository;
 
 //    @Autowired
 //    private Logger logger;
@@ -198,6 +203,11 @@ public class EventsService {
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
+        Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+
+        emailService.sendEventCreated(event,lang,getPlace.getAddress(),getPlace.getName());
+
+
 
         EventDTO resultDto = convertToDTO(savedEvent);
         resultDto.setFirstEventCreation(isFirstEventCreation);
@@ -283,7 +293,10 @@ public class EventsService {
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
+        Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
 
+
+        emailService.sendEventStatusChangeNotification(event,lang,getPlace.getName(),getPlace.getPhone());
         return savedEvent;
     }
 
@@ -787,6 +800,10 @@ public class EventsService {
                 if (!event.getDateTime().isAfter(now)) {
                     event.startEvent();
                     eventsRepository.save(event);
+                    Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+
+
+                    emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
                     log.info("Event {} automatically started at {}. Event time was: {}", 
                         event.getEventId(), now, event.getDateTime());
                 }
