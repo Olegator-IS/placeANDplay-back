@@ -284,7 +284,7 @@ public class EventsController {
             @RequestParam(required = false) List<EventStatus> statuses,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "dateTime,desc") String[] sort) {
+            @RequestParam(defaultValue = "date_time,desc") String[] sort) {
         
         log.info("Received request for organization events. PlaceId: {}, Statuses: {}, Page: {}, Size: {}, Sort: {}", 
             placeId, statuses, page, size, Arrays.toString(sort));

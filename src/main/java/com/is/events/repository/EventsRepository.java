@@ -163,7 +163,13 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             SELECT e.* FROM events.events e 
             WHERE e.place_id = :placeId
             AND (:statuses IS NULL OR e.status = ANY(:statuses))
-            """, nativeQuery = true)
+            """, 
+            countQuery = """
+            SELECT COUNT(*) FROM events.events e 
+            WHERE e.place_id = :placeId
+            AND (:statuses IS NULL OR e.status = ANY(:statuses))
+            """,
+            nativeQuery = true)
     Page<Event> findOrganizationEventsByStatus(
         @Param("placeId") Long placeId,
         @Param("statuses") String[] statuses,
