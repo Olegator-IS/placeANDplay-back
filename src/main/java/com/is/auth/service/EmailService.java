@@ -41,7 +41,7 @@ public class EmailService {
             Map<String, String> texts = Map.ofEntries(
                     new AbstractMap.SimpleEntry<>("ru_title", "Вы превысили лимит попыток. Попробуйте снова через 10 минут."),
                     new AbstractMap.SimpleEntry<>("en_title", "Your limit exceeded. Try again 10 minutes later."),
-                    new AbstractMap.SimpleEntry<>("uz_title", "Siz urinishlar limitidan oshdingiz. 10 daqiqadan so‘ng qayta urinib ko‘ring.")
+                    new AbstractMap.SimpleEntry<>("uz_title", "Siz urinishlar limitidan oshdingiz. 10 daqiqadan so'ng qayta urinib ko'ring.")
             );
 
             Map<String, String> textEmailIsVerified = Map.ofEntries(
@@ -128,8 +128,8 @@ public class EmailService {
                     new AbstractMap.SimpleEntry<>("en_footer", "This is an automated message, do not reply.<br>Best regards, the Place&Play team."),
 
                     new AbstractMap.SimpleEntry<>("uz_title", "Place&Play'ga xush kelibsiz!"),
-                    new AbstractMap.SimpleEntry<>("uz_instruction", "Ro‘yxatdan o‘tishni yakunlash uchun quyidagi kodni ilovaga kiriting:"),
-                    new AbstractMap.SimpleEntry<>("uz_ignore", "Agar siz ro‘yxatdan o‘tishni so‘ramagan bo‘lsangiz, ushbu xatni e’tiborsiz qoldiring."),
+                    new AbstractMap.SimpleEntry<>("uz_instruction", "Ro'yxatdan o'tishni yakunlash uchun quyidagi kodni ilovaga kiriting:"),
+                    new AbstractMap.SimpleEntry<>("uz_ignore", "Agar siz ro'yxatdan o'tishni so'ramagan bo'lsangiz, ushbu xatni e'tiborsiz qoldiring."),
                     new AbstractMap.SimpleEntry<>("uz_footer", "Bu avtomatik xabar, unga javob bermang.<br>Hurmat bilan, Place&Play jamoasi.")
             );
 
@@ -242,26 +242,32 @@ public class EmailService {
     """, bodyText);
     }
 
-    public ResponseEntity<?> sendEventCreated(Event event,String lang,String address,String name) {
+    public ResponseEntity<?> sendEventCreated(Event event, String lang, String address, String name) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             Map<String, String> texts = Map.ofEntries(
-                // Subjects
-                new AbstractMap.SimpleEntry<>("ru_subject", "Place&Play - Событие создано!"),
-                new AbstractMap.SimpleEntry<>("en_subject", "Place&Play - Event created!"),
-                new AbstractMap.SimpleEntry<>("uz_subject", "Place&Play - Tadbir yaratildi!"),
+                // Subjects with emojis
+                new AbstractMap.SimpleEntry<>("ru_subject", "🎉 Place&Play - Новое событие создано!"),
+                new AbstractMap.SimpleEntry<>("en_subject", "🎉 Place&Play - New Event Created!"),
+                new AbstractMap.SimpleEntry<>("uz_subject", "🎉 Place&Play - Yangi tadbir yaratildi!"),
 
-                // Greetings
-                new AbstractMap.SimpleEntry<>("ru_greeting", "Здравствуйте, %s!"),
-                new AbstractMap.SimpleEntry<>("en_greeting", "Hello, %s!"),
-                new AbstractMap.SimpleEntry<>("uz_greeting", "Salom, %s!"),
+                // Greetings with emojis
+                new AbstractMap.SimpleEntry<>("ru_greeting", "👋 Здравствуйте, %s!"),
+                new AbstractMap.SimpleEntry<>("en_greeting", "👋 Hello, %s!"),
+                new AbstractMap.SimpleEntry<>("uz_greeting", "👋 Salom, %s!"),
 
-                // Success messages
-                new AbstractMap.SimpleEntry<>("ru_success", "Вы успешно создали новое событие на платформе Place&Play."),
-                new AbstractMap.SimpleEntry<>("en_success", "You have successfully created a new event on Place&Play platform."),
-                new AbstractMap.SimpleEntry<>("uz_success", "Siz Place&Play platformasida yangi tadbirni muvaffaqiyatli yaratdingiz."),
+                // Success messages with emojis
+                new AbstractMap.SimpleEntry<>("ru_success", """
+                    ✨ Отлично! Вы успешно создали новое событие на платформе Place&Play.
+                    Мы уже отправили уведомление организаторам места проведения."""),
+                new AbstractMap.SimpleEntry<>("en_success", """
+                    ✨ Great! You have successfully created a new event on Place&Play platform.
+                    We have already notified the venue organizers."""),
+                new AbstractMap.SimpleEntry<>("uz_success", """
+                    ✨ Ajoyib! Siz Place&Play platformasida yangi tadbirni muvaffaqiyatli yaratdingiz.
+                    Biz allaqachon joy tashkilotchilariga xabar yubordik."""),
 
                 // Event details
                 new AbstractMap.SimpleEntry<>("ru_details", "Детали события:"),
@@ -289,32 +295,27 @@ public class EmailService {
                 new AbstractMap.SimpleEntry<>("en_status", "Status:"),
                 new AbstractMap.SimpleEntry<>("uz_status", "Holati:"),
 
-                // Status messages
-                new AbstractMap.SimpleEntry<>("ru_pending", "Ожидает подтверждения"),
-                new AbstractMap.SimpleEntry<>("en_pending", "Pending approval"),
-                new AbstractMap.SimpleEntry<>("uz_pending", "Tasdiqlash kutilmoqda"),
+                // Updated notification messages with emojis
+                new AbstractMap.SimpleEntry<>("ru_notify", """
+                    ⏳ Мы уведомим вас, как только организация рассмотрит вашу заявку.
+                    Обычно это занимает не более 24 часов."""),
+                new AbstractMap.SimpleEntry<>("en_notify", """
+                    ⏳ We will notify you as soon as the organization reviews your request.
+                    This usually takes no more than 24 hours."""),
+                new AbstractMap.SimpleEntry<>("uz_notify", """
+                    ⏳ Tashkilot arizangizni ko'rib chiqqanida sizga xabar beramiz.
+                    Bu odatda 24 soatdan oshmaydi."""),
 
-                // Notification messages
-                new AbstractMap.SimpleEntry<>("ru_notify", "Мы уведомим вас, когда организация рассмотрит вашу заявку."),
-                new AbstractMap.SimpleEntry<>("en_notify", "We will notify you when the organization reviews your request."),
-                new AbstractMap.SimpleEntry<>("uz_notify", "Tashkilot arizangizni ko'rib chiqqanda sizga xabar beramiz."),
+                // Updated button text with emoji
+                new AbstractMap.SimpleEntry<>("ru_button", "🔍 Посмотреть событие"),
+                new AbstractMap.SimpleEntry<>("en_button", "🔍 View Event"),
+                new AbstractMap.SimpleEntry<>("uz_button", "🔍 Tadbirni ko'rish"),
 
-                // Button text
-                new AbstractMap.SimpleEntry<>("ru_button", "Перейти к событию"),
-                new AbstractMap.SimpleEntry<>("en_button", "Go to event"),
-                new AbstractMap.SimpleEntry<>("uz_button", "Tadbirga o'tish"),
-
-                // Footer
-                new AbstractMap.SimpleEntry<>("ru_footer", "Это автоматическое уведомление от Place&Play."),
-                new AbstractMap.SimpleEntry<>("en_footer", "This is an automated notification from Place&Play."),
-                new AbstractMap.SimpleEntry<>("uz_footer", "Bu Place&Play'dan avtomatik bildirishnoma."),
-
-                new AbstractMap.SimpleEntry<>("ru_copyright", "© 2025 Place&Play. Все права защищены."),
-                new AbstractMap.SimpleEntry<>("en_copyright", "© 2025 Place&Play. All rights reserved."),
-                new AbstractMap.SimpleEntry<>("uz_copyright", "© 2025 Place&Play. Barcha huquqlar himoyalangan.")
+                // Updated footer with emoji
+                new AbstractMap.SimpleEntry<>("ru_footer", "📧 Это автоматическое уведомление от Place&Play."),
+                new AbstractMap.SimpleEntry<>("en_footer", "📧 This is an automated notification from Place&Play."),
+                new AbstractMap.SimpleEntry<>("uz_footer", "📧 Bu Place&Play'dan avtomatik bildirishnoma.")
             );
-
-            String prefix = texts.containsKey(lang + "_subject") ? lang : "ru";
 
             // Format date and time according to locale
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern(
@@ -326,6 +327,8 @@ public class EmailService {
             );
 
             String formattedDateTime = event.getDateTime().format(formatter);
+
+            String prefix = texts.containsKey(lang + "_subject") ? lang : "ru";
 
             // Prepare email content
             String content = String.format("""
@@ -349,14 +352,14 @@ public class EmailService {
                             max-width: 600px;
                             margin: 20px auto;
                             background-color: #ffffff;
-                            border-radius: 12px;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                            border-radius: 16px;
+                            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
                             overflow: hidden;
                         }
                         .header {
                             background: linear-gradient(135deg, #4CAF50 0%%, #45a049 100%%);
                             color: white;
-                            padding: 30px 20px;
+                            padding: 40px 20px;
                             text-align: center;
                             position: relative;
                         }
@@ -366,63 +369,68 @@ public class EmailService {
                             bottom: 0;
                             left: 0;
                             right: 0;
-                            height: 4px;
-                            background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%%, rgba(255,255,255,0.3) 50%%, rgba(255,255,255,0.1) 100%%);
+                            height: 6px;
+                            background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%%, rgba(255,255,255,0.4) 50%%, rgba(255,255,255,0.2) 100%%);
                         }
                         .logo {
-                            width: 120px;
+                            width: 140px;
                             height: auto;
-                            margin-bottom: 15px;
+                            margin-bottom: 20px;
+                            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
                         }
                         .header h2 {
                             margin: 0;
-                            font-size: 24px;
+                            font-size: 28px;
                             font-weight: 700;
-                            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                            letter-spacing: 0.5px;
                         }
                         .content {
-                            padding: 35px 30px;
+                            padding: 40px 30px;
                             background-color: #ffffff;
                         }
                         .greeting {
-                            font-size: 20px;
+                            font-size: 24px;
                             color: #2c3e50;
-                            margin-bottom: 20px;
+                            margin-bottom: 25px;
                             font-weight: 500;
                         }
                         .success-message {
                             color: #27ae60;
-                            font-size: 16px;
-                            margin-bottom: 25px;
-                            padding: 15px;
+                            font-size: 17px;
+                            margin-bottom: 30px;
+                            padding: 20px;
                             background-color: #f0f9f4;
-                            border-radius: 8px;
-                            border-left: 4px solid #27ae60;
+                            border-radius: 12px;
+                            border-left: 5px solid #27ae60;
+                            box-shadow: 0 2px 8px rgba(39, 174, 96, 0.1);
                         }
                         .event-details {
                             background-color: #f8fafc;
-                            padding: 25px;
-                            border-radius: 10px;
-                            margin: 25px 0;
+                            padding: 30px;
+                            border-radius: 12px;
+                            margin: 30px 0;
                             border: 1px solid #e2e8f0;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
                         }
                         .event-details h3 {
                             color: #2c3e50;
-                            margin: 0 0 20px 0;
-                            font-size: 18px;
+                            margin: 0 0 25px 0;
+                            font-size: 20px;
                             font-weight: 600;
-                            padding-bottom: 10px;
+                            padding-bottom: 12px;
                             border-bottom: 2px solid #e2e8f0;
                         }
                         .event-details p {
-                            margin: 12px 0;
+                            margin: 15px 0;
                             color: #4a5568;
                             display: flex;
                             align-items: center;
+                            font-size: 16px;
                         }
                         .event-details strong {
                             color: #2c3e50;
-                            min-width: 160px;
+                            min-width: 180px;
                             font-weight: 500;
                         }
                         .event-details span {
@@ -431,62 +439,67 @@ public class EmailService {
                         }
                         .status-badge {
                             display: inline-block;
-                            padding: 6px 12px;
+                            padding: 8px 16px;
                             background-color: #fff3cd;
                             color: #856404;
                             border-radius: 20px;
-                            font-size: 14px;
+                            font-size: 15px;
                             font-weight: 500;
+                            box-shadow: 0 2px 4px rgba(133, 77, 4, 0.1);
                         }
                         .notification {
                             background-color: #e3f2fd;
-                            padding: 15px 20px;
-                            border-radius: 8px;
-                            margin: 25px 0;
+                            padding: 20px 25px;
+                            border-radius: 12px;
+                            margin: 30px 0;
                             color: #1976d2;
-                            font-size: 15px;
-                            border-left: 4px solid #1976d2;
+                            font-size: 16px;
+                            border-left: 5px solid #1976d2;
+                            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
                         }
                         .button-container {
                             text-align: center;
-                            margin: 30px 0;
+                            margin: 35px 0;
                         }
                         .button {
                             display: inline-block;
-                            padding: 14px 28px;
+                            padding: 16px 32px;
                             background: linear-gradient(135deg, #4CAF50 0%%, #45a049 100%%);
                             color: white;
                             text-decoration: none;
-                            border-radius: 25px;
+                            border-radius: 30px;
                             font-weight: 500;
-                            font-size: 16px;
+                            font-size: 17px;
                             transition: all 0.3s ease;
-                            box-shadow: 0 4px 6px rgba(76, 175, 80, 0.2);
+                            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+                            letter-spacing: 0.5px;
                         }
                         .button:hover {
                             transform: translateY(-2px);
-                            box-shadow: 0 6px 8px rgba(76, 175, 80, 0.3);
+                            box-shadow: 0 6px 16px rgba(76, 175, 80, 0.3);
                             background: linear-gradient(135deg, #45a049 0%%, #3d8b40 100%%);
                         }
                         .footer {
                             text-align: center;
-                            padding: 25px;
+                            padding: 30px;
                             background-color: #f8fafc;
                             color: #64748b;
-                            font-size: 13px;
+                            font-size: 14px;
                             border-top: 1px solid #e2e8f0;
                         }
                         .footer p {
-                            margin: 5px 0;
+                            margin: 8px 0;
                         }
                         .social-links {
-                            margin: 15px 0;
+                            margin: 20px 0;
                         }
                         .social-links a {
                             display: inline-block;
-                            margin: 0 8px;
+                            margin: 0 12px;
                             color: #4CAF50;
                             text-decoration: none;
+                            font-weight: 500;
+                            transition: color 0.3s ease;
                         }
                         .social-links a:hover {
                             color: #45a049;
@@ -494,13 +507,13 @@ public class EmailService {
                         @media only screen and (max-width: 600px) {
                             .container {
                                 margin: 10px;
-                                border-radius: 8px;
+                                border-radius: 12px;
                             }
                             .content {
-                                padding: 20px;
+                                padding: 25px;
                             }
                             .event-details {
-                                padding: 15px;
+                                padding: 20px;
                             }
                             .event-details p {
                                 flex-direction: column;
@@ -508,12 +521,19 @@ public class EmailService {
                             }
                             .event-details strong {
                                 min-width: auto;
-                                margin-bottom: 5px;
+                                margin-bottom: 8px;
                             }
                             .button {
                                 display: block;
                                 text-align: center;
                                 margin: 0 auto;
+                                padding: 14px 28px;
+                            }
+                            .header {
+                                padding: 30px 15px;
+                            }
+                            .header h2 {
+                                font-size: 24px;
                             }
                         }
                     </style>
@@ -541,14 +561,6 @@ public class EmailService {
                                 <p>
                                     <strong>%s</strong>
                                     <span>%s</span>
-                                </p>
-                                <p>
-                                    <strong>%s</strong>
-                                    <span>%s</span>
-                                </p>
-                                <p>
-                                    <strong>%s</strong>
-                                    <span class="status-badge">%s</span>
                                 </p>
                             </div>
 
@@ -579,8 +591,7 @@ public class EmailService {
                 texts.get(prefix + "_datetime"), formattedDateTime,
                 texts.get(prefix + "_place"), name,
                 texts.get(prefix + "_address"), address,
-                texts.get(prefix + "_status"), texts.get(prefix + "_pending"),
-                texts.get(prefix + "_notify"),
+                texts.get(prefix + "_status"), texts.get(prefix + "_notify"),
                 event.getEventId(),
                 texts.get(prefix + "_button"),
                 texts.get(prefix + "_footer"),
@@ -620,141 +631,232 @@ public class EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             Map<String, String> texts = Map.ofEntries(
-                // Subjects
-                new AbstractMap.SimpleEntry<>("ru_subject_rejected", "Place&Play - Событие отклонено"),
-                new AbstractMap.SimpleEntry<>("en_subject_rejected", "Place&Play - Event Rejected"),
-                new AbstractMap.SimpleEntry<>("uz_subject_rejected", "Place&Play - Tadbir rad etildi"),
+                // Subjects with emojis
+                new AbstractMap.SimpleEntry<>("ru_subject_rejected", "❌ Place&Play - Событие отклонено"),
+                new AbstractMap.SimpleEntry<>("en_subject_rejected", "❌ Place&Play - Event Rejected"),
+                new AbstractMap.SimpleEntry<>("uz_subject_rejected", "❌ Place&Play - Tadbir rad etildi"),
 
-                new AbstractMap.SimpleEntry<>("ru_subject_confirmed", "Place&Play - Событие подтверждено"),
-                new AbstractMap.SimpleEntry<>("en_subject_confirmed", "Place&Play - Event Confirmed"),
-                new AbstractMap.SimpleEntry<>("uz_subject_confirmed", "Place&Play - Tadbir tasdiqlandi"),
+                new AbstractMap.SimpleEntry<>("ru_subject_confirmed", "✅ Place&Play - Событие подтверждено"),
+                new AbstractMap.SimpleEntry<>("en_subject_confirmed", "✅ Place&Play - Event Confirmed"),
+                new AbstractMap.SimpleEntry<>("uz_subject_confirmed", "✅ Place&Play - Tadbir tasdiqlandi"),
 
-                new AbstractMap.SimpleEntry<>("ru_subject_changes", "Place&Play - Требуются изменения"),
-                new AbstractMap.SimpleEntry<>("en_subject_changes", "Place&Play - Changes Required"),
-                new AbstractMap.SimpleEntry<>("uz_subject_changes", "Place&Play - O'zgarishlar talab qilinadi"),
+                new AbstractMap.SimpleEntry<>("ru_subject_changes", "📝 Place&Play - Требуются изменения"),
+                new AbstractMap.SimpleEntry<>("en_subject_changes", "📝 Place&Play - Changes Required"),
+                new AbstractMap.SimpleEntry<>("uz_subject_changes", "📝 Place&Play - O'zgarishlar talab qilinadi"),
 
-                new AbstractMap.SimpleEntry<>("ru_subject_expired", "Place&Play - Событие просрочено"),
-                new AbstractMap.SimpleEntry<>("en_subject_expired", "Place&Play - Event Expired"),
-                new AbstractMap.SimpleEntry<>("uz_subject_expired", "Place&Play - Tadbir muddati tugadi"),
+                new AbstractMap.SimpleEntry<>("ru_subject_expired", "⏰ Place&Play - Событие просрочено"),
+                new AbstractMap.SimpleEntry<>("en_subject_expired", "⏰ Place&Play - Event Expired"),
+                new AbstractMap.SimpleEntry<>("uz_subject_expired", "⏰ Place&Play - Tadbir muddati tugadi"),
 
-                new AbstractMap.SimpleEntry<>("ru_subject_in_progress", "Place&Play - Событие началось"),
-                new AbstractMap.SimpleEntry<>("en_subject_in_progress", "Place&Play - Event Started"),
-                new AbstractMap.SimpleEntry<>("uz_subject_in_progress", "Place&Play - Tadbir boshlandi"),
+                new AbstractMap.SimpleEntry<>("ru_subject_in_progress", "🎮 Place&Play - Событие началось"),
+                new AbstractMap.SimpleEntry<>("en_subject_in_progress", "🎮 Place&Play - Event Started"),
+                new AbstractMap.SimpleEntry<>("uz_subject_in_progress", "🎮 Place&Play - Tadbir boshlandi"),
 
-                new AbstractMap.SimpleEntry<>("ru_subject_completed", "Place&Play - Событие завершено"),
-                new AbstractMap.SimpleEntry<>("en_subject_completed", "Place&Play - Event Completed"),
-                new AbstractMap.SimpleEntry<>("uz_subject_completed", "Place&Play - Tadbir yakunlandi"),
+                new AbstractMap.SimpleEntry<>("ru_subject_completed", "🏆 Place&Play - Событие завершено"),
+                new AbstractMap.SimpleEntry<>("en_subject_completed", "🏆 Place&Play - Event Completed"),
+                new AbstractMap.SimpleEntry<>("uz_subject_completed", "🏆 Place&Play - Tadbir yakunlandi"),
 
-                // Greetings
-                new AbstractMap.SimpleEntry<>("ru_greeting", "Здравствуйте, %s!"),
-                new AbstractMap.SimpleEntry<>("en_greeting", "Hello, %s!"),
-                new AbstractMap.SimpleEntry<>("uz_greeting", "Salom, %s!"),
-
-                // Status Messages
+                // Updated status messages with emojis
                 new AbstractMap.SimpleEntry<>("ru_rejected", """
-                    К сожалению, организация "%s" отклонила вашу заявку на создание события.
-                    Вы можете позвонить по номеру %s, чтобы узнать детали отказа, либо попробовать создать событие на другую дату.
-                    Мы всегда готовы помочь вам организовать успешное мероприятие!"""),
+                    😔 К сожалению, организация "%s" отклонила вашу заявку на создание события.
+                    
+                    📞 Вы можете позвонить по номеру %s, чтобы узнать детали отказа.
+                    🔄 Или попробовать создать событие на другую дату.
+                    
+                    💪 Мы всегда готовы помочь вам организовать успешное мероприятие!"""),
                 new AbstractMap.SimpleEntry<>("en_rejected", """
-                    Unfortunately, the organization "%s" has rejected your event creation request.
-                    You can call %s to learn more about the rejection details, or try to create an event for a different date.
-                    We are always ready to help you organize a successful event!"""),
+                    😔 Unfortunately, the organization "%s" has rejected your event creation request.
+                    
+                    📞 You can call %s to learn more about the rejection details.
+                    🔄 Or try to create an event for a different date.
+                    
+                    💪 We are always ready to help you organize a successful event!"""),
                 new AbstractMap.SimpleEntry<>("uz_rejected", """
-                    Afsuski, "%s" tashkiloti sizning tadbir yaratish so'rovingizni rad etdi.
-                    Rad etilish sabablari haqida batafsil ma'lumot olish uchun %s raqamiga qo'ng'iroq qilishingiz yoki boshqa sana uchun tadbir yaratishni sinab ko'rishingiz mumkin.
-                    Biz sizga muvaffaqiyatli tadbir tashkil qilishda yordam berishga har doim tayyormiz!"""),
+                    😔 Afsuski, "%s" tashkiloti sizning tadbir yaratish so'rovingizni rad etdi.
+                    
+                    📞 Rad etilish sabablari haqida batafsil ma'lumot olish uchun %s raqamiga qo'ng'iroq qilishingiz mumkin.
+                    🔄 Yoki boshqa sana uchun tadbir yaratishni sinab ko'rishingiz mumkin.
+                    
+                    💪 Biz sizga muvaffaqiyatli tadbir tashkil qilishda yordam berishga har doim tayyormiz!"""),
 
                 new AbstractMap.SimpleEntry<>("ru_confirmed", """
-                    Организация "%s" подтвердила регистрацию вашего события!
-                    Событие состоится в запланированное время (%s).
-                    Просим прибыть заранее, если это возможно.
-                    Событие начнется автоматически в указанное время (±5 минут).
-                    Если вы считаете, что это сообщение ошибочно и вы не создавали данное событие, пожалуйста, свяжитесь с нами по номеру %s."""),
+                    🎉 Отличные новости! Организация "%s" подтвердила регистрацию вашего события!
+                    
+                    📅 Событие состоится в запланированное время (%s).
+                    
+                    ⏰ Важная информация:
+                    • Просим прибыть заранее, если это возможно
+                    • Событие начнется автоматически в указанное время (±5 минут)
+                    
+                    ⚠️ Если вы считаете, что это сообщение ошибочно и вы не создавали данное событие,
+                    пожалуйста, свяжитесь с нами по номеру %s."""),
                 new AbstractMap.SimpleEntry<>("en_confirmed", """
-                    The organization "%s" has confirmed your event registration!
-                    The event will take place at the scheduled time (%s).
-                    Please arrive early if possible.
-                    The event will start automatically at the specified time (±5 minutes).
-                    If you believe this message is in error and you did not create this event, please contact us at %s."""),
+                    🎉 Great news! The organization "%s" has confirmed your event registration!
+                    
+                    📅 The event will take place at the scheduled time (%s).
+                    
+                    ⏰ Important information:
+                    • Please arrive early if possible
+                    • The event will start automatically at the specified time (±5 minutes)
+                    
+                    ⚠️ If you believe this message is in error and you did not create this event,
+                    please contact us at %s."""),
                 new AbstractMap.SimpleEntry<>("uz_confirmed", """
-                    "%s" tashkiloti sizning tadbiringizni tasdiqladi!
-                    Tadbir rejalashtirilgan vaqtda (%s) bo'lib o'tadi.
-                    Iltimos, imkoniyat bo'lsa, oldindan kelib turing.
-                    Tadbir ko'rsatilgan vaqtda avtomatik ravishda (±5 daqiqa) boshlanadi.
-                    Agar siz bu xabarni xato deb hisoblasangiz va bu tadbirni yaratmagan bo'lsangiz, iltimos, %s raqamiga qo'ng'iroq qiling."""),
+                    🎉 Ajoyib yangilik! "%s" tashkiloti sizning tadbiringizni tasdiqladi!
+                    
+                    📅 Tadbir rejalashtirilgan vaqtda (%s) bo'lib o'tadi.
+                    
+                    ⏰ Muhim ma'lumot:
+                    • Iltimos, imkoniyat bo'lsa, oldindan kelib turing
+                    • Tadbir ko'rsatilgan vaqtda avtomatik ravishda (±5 daqiqa) boshlanadi
+                    
+                    ⚠️ Agar siz bu xabarni xato deb hisoblasangiz va bu tadbirni yaratmagan bo'lsangiz,
+                    iltimos, %s raqamiga qo'ng'iroq qiling."""),
 
                 new AbstractMap.SimpleEntry<>("ru_changes", """
-                    Организация "%s" запросила изменения в данных вашего события.
-                    Пожалуйста, свяжитесь с нами по номеру %s для уточнения деталей.
-                    Мы поможем вам внести необходимые корректировки."""),
+                    📝 Организация "%s" запросила изменения в данных вашего события.
+                    
+                    📞 Пожалуйста, свяжитесь с нами по номеру %s для уточнения деталей.
+                    
+                    🤝 Мы поможем вам внести необходимые корректировки и сделаем всё возможное,
+                    чтобы ваше событие прошло успешно!"""),
                 new AbstractMap.SimpleEntry<>("en_changes", """
-                    The organization "%s" has requested changes to your event details.
-                    Please contact us at %s for more information.
-                    We will help you make the necessary adjustments."""),
+                    📝 The organization "%s" has requested changes to your event details.
+                    
+                    📞 Please contact us at %s for more information.
+                    
+                    🤝 We will help you make the necessary adjustments and do everything possible
+                    to make your event successful!"""),
                 new AbstractMap.SimpleEntry<>("uz_changes", """
-                    "%s" tashkiloti tadbiringiz ma'lumotlarida o'zgarishlar so'radi.
-                    Tafsilotlarni aniqlash uchun %s raqamiga qo'ng'iroq qiling.
-                    Biz sizga kerakli o'zgarishlarni kiritishda yordam beramiz."""),
+                    📝 "%s" tashkiloti tadbiringiz ma'lumotlarida o'zgarishlar so'radi.
+                    
+                    📞 Tafsilotlarni aniqlash uchun %s raqamiga qo'ng'iroq qiling.
+                    
+                    🤝 Biz sizga kerakli o'zgarishlarni kiritishda yordam beramiz va tadbiringiz
+                    muvaffaqiyatli o'tishi uchun hamma imkoniyatlardan foydalanamiz!"""),
 
                 new AbstractMap.SimpleEntry<>("ru_expired", """
-                    К сожалению, ваше событие было автоматически отменено, так как организация не отреагировала на запрос в течение установленного времени.
-                    Это может произойти, если организация временно недоступна или перегружена запросами.
-                    Мы рекомендуем:
+                    ⏰ К сожалению, ваше событие было автоматически отменено, так как организация
+                    не отреагировала на запрос в течение установленного времени.
+                    
+                    ℹ️ Это может произойти, если:
+                    • Организация временно недоступна
+                    • Организация перегружена запросами
+                    
+                    💡 Рекомендации:
                     1. Попробовать создать событие на другую дату
                     2. Связаться с организацией напрямую по номеру %s
                     3. Выбрать другое место для проведения события
-                    Мы всегда готовы помочь вам организовать успешное мероприятие!"""),
+                    
+                    💪 Мы всегда готовы помочь вам организовать успешное мероприятие!"""),
                 new AbstractMap.SimpleEntry<>("en_expired", """
-                    Unfortunately, your event has been automatically cancelled as the organization did not respond to the request within the specified time.
-                    This can happen if the organization is temporarily unavailable or overwhelmed with requests.
-                    We recommend:
+                    ⏰ Unfortunately, your event has been automatically cancelled as the organization
+                    did not respond to the request within the specified time.
+                    
+                    ℹ️ This can happen if:
+                    • The organization is temporarily unavailable
+                    • The organization is overwhelmed with requests
+                    
+                    💡 Recommendations:
                     1. Try creating an event for a different date
                     2. Contact the organization directly at %s
                     3. Choose a different venue for your event
-                    We are always ready to help you organize a successful event!"""),
+                    
+                    💪 We are always ready to help you organize a successful event!"""),
                 new AbstractMap.SimpleEntry<>("uz_expired", """
-                    Afsuski, tashkilot belgilangan vaqt ichida so'rovga javob bermagani uchun sizning tadbiringiz avtomatik ravishda bekor qilindi.
-                    Bu tashkilot vaqtincha mavjud bo'lmasa yoki so'rovlar bilan band bo'lsa yuz berishi mumkin.
-                    Biz tavsiya qilamiz:
+                    ⏰ Afsuski, tashkilot belgilangan vaqt ichida so'rovga javob bermagani uchun
+                    sizning tadbiringiz avtomatik ravishda bekor qilindi.
+                    
+                    ℹ️ Bu quyidagi sabablarga ko'ra yuz berishi mumkin:
+                    • Tashkilot vaqtincha mavjud bo'lmasa
+                    • Tashkilot so'rovlar bilan band bo'lsa
+                    
+                    💡 Tavsiyalar:
                     1. Boshqa sana uchun tadbir yaratishni sinab ko'ring
                     2. %s raqami orqali tashkilot bilan to'g'ridan-to'g'ri bog'laning
                     3. Tadbiringiz uchun boshqa joyni tanlang
-                    Biz sizga muvaffaqiyatli tadbir tashkil qilishda yordam berishga har doim tayyormiz!"""),
+                    
+                    💪 Biz sizga muvaffaqiyatli tadbir tashkil qilishda yordam berishga har doim tayyormiz!"""),
 
                 new AbstractMap.SimpleEntry<>("ru_in_progress", """
-                    Уважаемый(ая) %s!
-                    Ваше событие началось в указанном месте.
-                    Желаем вам и вашим участникам удачи и отличного времяпрепровождения!
-                    Наслаждайтесь игрой и общением!"""),
+                    🎮 Уважаемый(ая) %s!
+                    
+                    🎯 Ваше событие началось в указанном месте.
+                    
+                    ✨ Желаем вам и вашим участникам:
+                    • Удачи в игре
+                    • Отличного времяпрепровождения
+                    • Приятного общения
+                    
+                    🎉 Наслаждайтесь игрой!"""),
                 new AbstractMap.SimpleEntry<>("en_in_progress", """
-                    Dear %s!
-                    Your event has started at the specified location.
-                    We wish you and your participants good luck and a great time!
-                    Enjoy the game and communication!"""),
+                    🎮 Dear %s!
+                    
+                    🎯 Your event has started at the specified location.
+                    
+                    ✨ We wish you and your participants:
+                    • Good luck in the game
+                    • A great time
+                    • Pleasant communication
+                    
+                    🎉 Enjoy the game!"""),
                 new AbstractMap.SimpleEntry<>("uz_in_progress", """
-                    Hurmatli %s!
-                    Sizning tadbiringiz ko'rsatilgan joyda boshlandi.
-                    Sizga va ishtirokchilaringizga omad va yaxshi vaqt o'tkazishni tilaymiz!
-                    O'yin va muloqotdan zavqlaning!"""),
+                    🎮 Hurmatli %s!
+                    
+                    🎯 Sizning tadbiringiz ko'rsatilgan joyda boshlandi.
+                    
+                    ✨ Sizga va ishtirokchilaringizga:
+                    • O'yinda omad
+                    • Yaxshi vaqt o'tkazish
+                    • Yoqimli muloqot
+                    
+                    🎉 O'yindan zavqlaning!"""),
 
                 new AbstractMap.SimpleEntry<>("ru_completed", """
-                    Поздравляем!
-                    Ваше событие успешно завершено. Это значит, что всё прошло отлично и всем всё понравилось!
-                    Благодарим вас за организацию мероприятия и надеемся, что все участники остались довольны.
-                    Желаем вам и вашим участникам дальнейших успехов и ждём вас снова!
-                    До новых встреч на Place&Play!"""),
+                    🏆 Поздравляем!
+                    
+                    ✨ Ваше событие успешно завершено. Это значит, что всё прошло отлично
+                    и всем всё понравилось!
+                    
+                    🙏 Благодарим вас за организацию мероприятия и надеемся,
+                    что все участники остались довольны.
+                    
+                    💫 Желаем вам и вашим участникам:
+                    • Дальнейших успехов
+                    • Новых интересных встреч
+                    • Приятных воспоминаний
+                    
+                    🎮 До новых встреч на Place&Play!"""),
                 new AbstractMap.SimpleEntry<>("en_completed", """
-                    Congratulations!
-                    Your event has been successfully completed. This means everything went great and everyone enjoyed it!
-                    Thank you for organizing the event and we hope all participants were satisfied.
-                    We wish you and your participants continued success and look forward to seeing you again!
-                    See you next time at Place&Play!"""),
+                    🏆 Congratulations!
+                    
+                    ✨ Your event has been successfully completed. This means everything went great
+                    and everyone enjoyed it!
+                    
+                    🙏 Thank you for organizing the event and we hope
+                    all participants were satisfied.
+                    
+                    💫 We wish you and your participants:
+                    • Continued success
+                    • New interesting meetings
+                    • Pleasant memories
+                    
+                    🎮 See you next time at Place&Play!"""),
                 new AbstractMap.SimpleEntry<>("uz_completed", """
-                    Tabriklaymiz!
-                    Sizning tadbiringiz muvaffaqiyatli yakunlandi. Bu hammasi ajoyib o'tgani va hamma mamnun bo'lgani degani!
-                    Tadbirni tashkil qilganingiz uchun tashakkur va barcha ishtirokchilar mamnun bo'lganiga umid qilamiz.
-                    Sizga va ishtirokchilaringizga keyingi muvaffaqiyatlarni tilaymiz va sizni yana kutamiz!
-                    Place&Play'da keyingi uchrashuvgacha!"""),
+                    🏆 Tabriklaymiz!
+                    
+                    ✨ Sizning tadbiringiz muvaffaqiyatli yakunlandi. Bu hammasi ajoyib o'tgani
+                    va hamma mamnun bo'lgani degani!
+                    
+                    🙏 Tadbirni tashkil qilganingiz uchun tashakkur va barcha ishtirokchilar
+                    mamnun bo'lganiga umid qilamiz.
+                    
+                    💫 Sizga va ishtirokchilaringizga:
+                    • Keyingi muvaffaqiyatlarni
+                    • Yangi qiziqarli uchrashuvlarni
+                    • Yoqimli xotiralarni
+                    
+                    🎮 Place&Play'da keyingi uchrashuvgacha!"""),
 
                 // Common elements
                 new AbstractMap.SimpleEntry<>("ru_event_details", "Детали события:"),
@@ -818,16 +920,203 @@ public class EmailService {
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <style>
-                        /* ... existing styles ... */
-                        .status-message {
-                            background-color: %s;
-                            color: %s;
-                            padding: 20px;
-                            border-radius: 8px;
-                            margin: 20px 0;
-                            border-left: 4px solid %s;
-                            font-size: 15px;
+                        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+                        
+                        body {
+                            font-family: 'Roboto', Arial, sans-serif;
                             line-height: 1.6;
+                            color: #2c3e50;
+                            margin: 0;
+                            padding: 0;
+                            background-color: #f5f7fa;
+                        }
+                        .container {
+                            max-width: 600px;
+                            margin: 20px auto;
+                            background-color: #ffffff;
+                            border-radius: 16px;
+                            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+                            overflow: hidden;
+                        }
+                        .header {
+                            background: linear-gradient(135deg, #4CAF50 0%%, #45a049 100%%);
+                            color: white;
+                            padding: 40px 20px;
+                            text-align: center;
+                            position: relative;
+                        }
+                        .header::after {
+                            content: '';
+                            position: absolute;
+                            bottom: 0;
+                            left: 0;
+                            right: 0;
+                            height: 6px;
+                            background: linear-gradient(90deg, rgba(255,255,255,0.2) 0%%, rgba(255,255,255,0.4) 50%%, rgba(255,255,255,0.2) 100%%);
+                        }
+                        .logo {
+                            width: 140px;
+                            height: auto;
+                            margin-bottom: 20px;
+                            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+                        }
+                        .header h2 {
+                            margin: 0;
+                            font-size: 28px;
+                            font-weight: 700;
+                            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                            letter-spacing: 0.5px;
+                        }
+                        .content {
+                            padding: 40px 30px;
+                            background-color: #ffffff;
+                        }
+                        .greeting {
+                            font-size: 24px;
+                            color: #2c3e50;
+                            margin-bottom: 25px;
+                            font-weight: 500;
+                        }
+                        .success-message {
+                            color: #27ae60;
+                            font-size: 17px;
+                            margin-bottom: 30px;
+                            padding: 20px;
+                            background-color: #f0f9f4;
+                            border-radius: 12px;
+                            border-left: 5px solid #27ae60;
+                            box-shadow: 0 2px 8px rgba(39, 174, 96, 0.1);
+                        }
+                        .event-details {
+                            background-color: #f8fafc;
+                            padding: 30px;
+                            border-radius: 12px;
+                            margin: 30px 0;
+                            border: 1px solid #e2e8f0;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                        }
+                        .event-details h3 {
+                            color: #2c3e50;
+                            margin: 0 0 25px 0;
+                            font-size: 20px;
+                            font-weight: 600;
+                            padding-bottom: 12px;
+                            border-bottom: 2px solid #e2e8f0;
+                        }
+                        .event-details p {
+                            margin: 15px 0;
+                            color: #4a5568;
+                            display: flex;
+                            align-items: center;
+                            font-size: 16px;
+                        }
+                        .event-details strong {
+                            color: #2c3e50;
+                            min-width: 180px;
+                            font-weight: 500;
+                        }
+                        .event-details span {
+                            color: #4a5568;
+                            flex: 1;
+                        }
+                        .status-badge {
+                            display: inline-block;
+                            padding: 8px 16px;
+                            background-color: #fff3cd;
+                            color: #856404;
+                            border-radius: 20px;
+                            font-size: 15px;
+                            font-weight: 500;
+                            box-shadow: 0 2px 4px rgba(133, 77, 4, 0.1);
+                        }
+                        .notification {
+                            background-color: #e3f2fd;
+                            padding: 20px 25px;
+                            border-radius: 12px;
+                            margin: 30px 0;
+                            color: #1976d2;
+                            font-size: 16px;
+                            border-left: 5px solid #1976d2;
+                            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+                        }
+                        .button-container {
+                            text-align: center;
+                            margin: 35px 0;
+                        }
+                        .button {
+                            display: inline-block;
+                            padding: 16px 32px;
+                            background: linear-gradient(135deg, #4CAF50 0%%, #45a049 100%%);
+                            color: white;
+                            text-decoration: none;
+                            border-radius: 30px;
+                            font-weight: 500;
+                            font-size: 17px;
+                            transition: all 0.3s ease;
+                            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+                            letter-spacing: 0.5px;
+                        }
+                        .button:hover {
+                            transform: translateY(-2px);
+                            box-shadow: 0 6px 16px rgba(76, 175, 80, 0.3);
+                            background: linear-gradient(135deg, #45a049 0%%, #3d8b40 100%%);
+                        }
+                        .footer {
+                            text-align: center;
+                            padding: 30px;
+                            background-color: #f8fafc;
+                            color: #64748b;
+                            font-size: 14px;
+                            border-top: 1px solid #e2e8f0;
+                        }
+                        .footer p {
+                            margin: 8px 0;
+                        }
+                        .social-links {
+                            margin: 20px 0;
+                        }
+                        .social-links a {
+                            display: inline-block;
+                            margin: 0 12px;
+                            color: #4CAF50;
+                            text-decoration: none;
+                            font-weight: 500;
+                            transition: color 0.3s ease;
+                        }
+                        .social-links a:hover {
+                            color: #45a049;
+                        }
+                        @media only screen and (max-width: 600px) {
+                            .container {
+                                margin: 10px;
+                                border-radius: 12px;
+                            }
+                            .content {
+                                padding: 25px;
+                            }
+                            .event-details {
+                                padding: 20px;
+                            }
+                            .event-details p {
+                                flex-direction: column;
+                                align-items: flex-start;
+                            }
+                            .event-details strong {
+                                min-width: auto;
+                                margin-bottom: 8px;
+                            }
+                            .button {
+                                display: block;
+                                text-align: center;
+                                margin: 0 auto;
+                                padding: 14px 28px;
+                            }
+                            .header {
+                                padding: 30px 15px;
+                            }
+                            .header h2 {
+                                font-size: 24px;
+                            }
                         }
                     </style>
                 </head>
