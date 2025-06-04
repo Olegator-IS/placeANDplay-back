@@ -567,7 +567,7 @@ public class EmailService {
                             <div class="notification">%s</div>
                             
                             <div class="button-container">
-                                <a href="https://placeandplay.uz/events/%d" class="button">%s</a>
+                                <a href="https://placeandplay.uz/events/%s" class="button">%s</a>
                             </div>
                         </div>
                         <div class="footer">
@@ -592,7 +592,7 @@ public class EmailService {
                 texts.get(prefix + "_place"), name,
                 texts.get(prefix + "_address"), address,
                 texts.get(prefix + "_status"), texts.get(prefix + "_notify"),
-                event.getEventId(),
+                event.getEventId().toString(),
                 texts.get(prefix + "_button"),
                 texts.get(prefix + "_footer"),
                 texts.get(prefix + "_copyright")
@@ -1147,7 +1147,7 @@ public class EmailService {
                             </div>
                             
                             <div class="button-container">
-                                <a href="https://placeandplay.uz/events/%d" class="button">%s</a>
+                                <a href="https://placeandplay.uz/events/%s" class="button">%s</a>
                             </div>
                         </div>
                         <div class="footer">
@@ -1198,7 +1198,7 @@ public class EmailService {
                 texts.get(prefix + "_name"), event.getSportEvent().getSportName(),
                 texts.get(prefix + "_datetime"), formattedDateTime,
                 texts.get(prefix + "_place"), placeName,
-                event.getEventId(),
+                event.getEventId().toString(),
                 texts.get(prefix + "_button"),
                 texts.get(prefix + "_footer"),
                 texts.get(prefix + "_copyright")

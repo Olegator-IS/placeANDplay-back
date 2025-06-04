@@ -1,6 +1,7 @@
 package com.is.events.service;
 
 import com.is.auth.service.EmailService;
+import com.is.auth.service.PushNotificationService;
 import com.is.events.dto.EventDTO;
 import com.is.events.dto.OrganizerDTO;
 import com.is.events.dto.ParticipantDTO;
@@ -43,6 +44,7 @@ import com.is.events.dto.EventStatusUpdateRequest;
 import com.is.events.service.EventMessageService;
 import com.is.events.dto.UserEventStatisticsDTO;
 import com.is.events.dto.EventJoinAvailabilityResponse;
+import com.is.events.model.EventParticipant;
 
 @Slf4j
 @Service
@@ -58,6 +60,7 @@ public class EventsService {
     private final EventMessageService eventMessageService;
     private final EmailService emailService;
     private final PlaceRepository placeRepository;
+    private final PushNotificationService pushNotificationService;
 
 //    @Autowired
 //    private Logger logger;
@@ -233,7 +236,11 @@ public class EventsService {
             Event updatedEvent = eventsRepository.save(event);
 
             // Отправляем системное сообщение о присоединении участника
-            eventMessageService.sendEventMessage(updatedEvent, EventMessageType.PARTICIPANT_JOINED, userName,lang);
+            eventMessageService.sendEventMessage(updatedEvent, EventMessageType.PARTICIPANT_JOINED, userName, lang);
+
+            // Отправляем push-уведомление организатору
+            EventParticipant participant = new EventParticipant(updatedEvent, userRepository.getById(userId));
+            pushNotificationService.sendParticipantJoinedNotification(updatedEvent, participant);
 
             // Отправляем уведомление через WebSocket
             webSocketService.notifyEventUpdate(event.getPlaceId());
@@ -289,6 +296,9 @@ public class EventsService {
         } else {
             eventMessageService.sendEventMessage(savedEvent, EventMessageType.STATUS_CHANGED, null,lang);
         }
+
+        // Отправляем push-уведомление организатору
+        pushNotificationService.sendEventStatusChangeNotification(savedEvent, newStatus);
 
         // Отправляем уведомление через WebSocket
         webSocketService.notifyEventUpdate(event.getPlaceId());
@@ -348,7 +358,11 @@ public class EventsService {
             Event updatedEvent = eventsRepository.save(event);
 
             // Отправляем системное сообщение о выходе участника
-            eventMessageService.sendEventMessage(updatedEvent, EventMessageType.PARTICIPANT_LEFT, participantName,lang);
+            eventMessageService.sendEventMessage(updatedEvent, EventMessageType.PARTICIPANT_LEFT, participantName, lang);
+
+            // Отправляем push-уведомление организатору
+            EventParticipant participant = new EventParticipant(updatedEvent, userRepository.getById(participantId));
+            pushNotificationService.sendParticipantLeftNotification(updatedEvent, participant);
 
             // Отправляем уведомление через WebSocket
             webSocketService.notifyEventUpdate(event.getPlaceId());

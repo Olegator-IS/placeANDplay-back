@@ -4,10 +4,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.is.auth.model.ResponseAnswers.Response;
 import com.is.auth.model.user.UserService;
+import com.is.auth.service.PushNotificationService;
+import com.is.events.model.Event;
 import com.is.events.model.chat.EventMessage;
 import com.is.events.model.chat.ChatMessagesRequest;
 import com.is.events.model.chat.MessageType;
 import com.is.events.repository.EventMessageRepository;
+import com.is.events.repository.EventsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.is.events.model.chat.ChatMessageDTO;
@@ -34,6 +37,8 @@ public class ChatService {
     private final UserService userService;
     private final WebSocketService webSocketService;
     private final ObjectMapper objectMapper;
+    private final PushNotificationService pushNotificationService;
+    private final EventsRepository eventsRepository;
 
     public Page<ChatMessageDTO> getEventMessages(Long eventId, ChatMessagesRequest request,
                                                String accessToken, String refreshToken, String lang) {
@@ -196,7 +201,22 @@ public class ChatService {
             ChatMessageDTO messageDTO = convertToDTO(savedMessage);
             Map<Long, String> userAvatars = userService.getUsersProfilePicturesForChat(List.of(userId));
             messageDTO.setSenderAvatarUrl(userAvatars.getOrDefault(userId, ""));
+
+            // Отправляем сообщение через WebSocket
             messagingTemplate.convertAndSend("/topic/chat/" + eventId, messageDTO);
+
+            // Отправляем push-уведомления участникам
+            Event event = eventsRepository.findEventByEventId(eventId);
+            if (event != null) {
+                String senderName = messageDTO.getSenderName();
+                pushNotificationService.sendNewChatMessageNotification(
+                    event,
+                    senderName,
+                    messageDTO.getContent(),
+                    userId
+                );
+            }
+
             return messageDTO;
         } catch (Exception e) {
             log.error("Error sending message: {}", e.getMessage());
