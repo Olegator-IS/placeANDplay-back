@@ -28,11 +28,12 @@
 ## 📁 Структура
 
 src/
-├── config/         // Конфигурация безопасности
-├── controller/     // REST-контроллеры
-├── model/          // DTO и сущности
-├── repository/     // Репозитории Spring Data
-├── service/        // Бизнес-логика
+├── config/         # Настройки безопасности и CORS
+├── controller/     # REST-контроллеры
+├── model/          # DTO и сущности
+├── repository/     # JPA-репозитории
+├── service/        # Бизнес-логика
+
 
 ---
 
