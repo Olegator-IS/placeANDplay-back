@@ -33,3 +33,5 @@ src/
 ├── model/          // DTO и сущности
 ├── repository/     // Репозитории Spring Data
 ├── service/        // Бизнес-логика
+
+---
