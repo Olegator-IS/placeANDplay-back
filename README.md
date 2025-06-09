@@ -25,14 +25,6 @@
 
 ---
 
-## 📦 Сборка и запуск
-
-```bash
-./gradlew bootRun
-Или через IntelliJ IDEA → класс PlaceAndPlayApplication.java
-
----
-
 ## 📦 Сборка1 и запуск1
 
 ```bash
