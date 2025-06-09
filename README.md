@@ -35,3 +35,16 @@ src/
 ├── service/        // Бизнес-логика
 
 ---
+
+## ⚙️ Запуск проекта
+
+```bash
+./gradlew bootRun
+Или через IntelliJ IDEA → Main class: com.placeandplay.AuthPlaceAndPlayApplication
+
+---
+
+## 🧪 Тестовые данные
+Логин: test@placeplay.com
+
+Пароль: play1234
