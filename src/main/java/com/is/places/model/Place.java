@@ -37,4 +37,5 @@ public class Place {
     private int currentLocationCityId;
     @Column(name = "current_location_country_id")
     private int currentLocationCountryId;
+    private Long orgId;
 }

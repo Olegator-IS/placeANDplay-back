@@ -15,7 +15,7 @@ public class EventDTO {
     private Long placeId;
     private OrganizerDTO organizer;
     private List<ParticipantDTO> participants = new ArrayList<>();
-    
+
     // Дополнительные поля для отображения
     private int participantsCount;
     private boolean isJoinable;
@@ -23,7 +23,8 @@ public class EventDTO {
     private String eventType;
     private String location;
     private Double price;
-    
+    private boolean isFirstEventCreation;
+
     public void addParticipant(ParticipantDTO participant) {
         if (this.participants == null) {
             this.participants = new ArrayList<>();
@@ -31,7 +32,7 @@ public class EventDTO {
         this.participants.add(participant);
         this.participantsCount = this.participants.size();
     }
-    
+
     public void removeParticipant(Long participantId) {
         if (this.participants != null) {
             this.participants.removeIf(p -> p.getParticipantId().equals(participantId));

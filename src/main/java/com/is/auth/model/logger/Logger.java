@@ -3,6 +3,7 @@ package com.is.auth.model.logger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -11,11 +12,17 @@ import java.util.Map;
 @Slf4j
 @Component
 public class Logger {
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public Logger(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     public void logRequestDetails(HttpStatus statusCode, long currentTime, String method, String url, String requestId, String clientIp,
                                   long executionTime,
                                   Object requestBody, Object result) {
 
-        ObjectMapper objectMapper = new ObjectMapper();
         String callerClassName = new Throwable().getStackTrace()[1].getClassName();
         org.slf4j.Logger dynamicLogger = LoggerFactory.getLogger(callerClassName);
         try {
@@ -34,7 +41,6 @@ public class Logger {
 
             String apiJson = objectMapper.writeValueAsString(api);
             String clientJson = objectMapper.writeValueAsString(client);
-
 
             // Логируем с уровнем INFO, передавая JSON-строки напрямую
             if (statusCode == HttpStatus.OK||statusCode == HttpStatus.CREATED) {
@@ -73,9 +79,8 @@ public class Logger {
         }
     }
 
-    public static String sanitizeLog(String log) {
+    public String sanitizeLog(String log) {
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
             Map<String, Object> logMap = objectMapper.readValue(log, Map.class);
             // Находим поле password
             if (logMap != null && logMap.containsKey("password")) {

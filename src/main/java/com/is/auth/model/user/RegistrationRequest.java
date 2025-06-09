@@ -4,9 +4,11 @@ import io.swagger.annotations.ApiModelProperty;
 import io.swagger.annotations.ApiOperation;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 @Setter
 @Getter
+@NoArgsConstructor
 @ApiOperation(value = "Первичная регистрация пользователя", notes = "Передаётся JSON модель,содержащая email," +
         "password - в открытом виде,fisrt_name и last_name")
 

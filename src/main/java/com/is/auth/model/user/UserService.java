@@ -3,6 +3,9 @@ package com.is.auth.model.user;
 import com.is.auth.api.CustomAuthenticationProvider;
 import com.is.auth.config.JwtAuthenticationFilter;
 import com.is.auth.config.TokenSecurity;
+import com.is.auth.model.dto.ActivityStatsDTO;
+import com.is.auth.model.dto.ReputationDTO;
+import com.is.auth.model.user.UserInfoResponse;
 import com.is.auth.exception.UserAlreadyExistsException;
 import com.is.auth.model.ResponseAnswers.Response;
 import com.is.auth.model.enums.Language;
@@ -12,11 +15,14 @@ import com.is.auth.model.logger.Logger;
 import com.is.auth.model.sports.SkillsDTO;
 import com.is.auth.model.sports.SportsDTO;
 import com.is.auth.repository.*;
+import com.is.auth.service.EmailService;
 import com.is.auth.service.RequestLogger;
 import com.is.auth.service.FileStorageService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -30,6 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.CacheEvict;
 
 import javax.crypto.SecretKey;
 import java.io.File;
@@ -39,7 +47,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.*;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.MalformedJwtException;
+import com.is.events.service.EventsService;
+import com.is.events.dto.UserEventStatisticsDTO;
 
 @Service
 @Slf4j
@@ -57,6 +72,14 @@ public class UserService {
     private final ListOfCitiesRepository listOfCitiesRepository;
     private final ListOfCountriesRepository listOfCountriesRepository;
     private final FileStorageService fileStorageService;
+    private final EmailService emailService;
+    private final UserHobbyRepository userHobbyRepository;
+    private final UserContactRepository userContactRepository;
+    private final UserActivityStatsRepository userActivityStatsRepository;
+    private final UserReputationRepository userReputationRepository;
+    private final ObjectMapper objectMapper;
+    @Autowired
+    private EventsService eventsService;
 
     @Autowired
     private Logger logger;
@@ -75,7 +98,13 @@ public class UserService {
                       ListOfSkillsRepository listOfSkillsRepository,
                       ListOfCitiesRepository listOfCitiesRepository,
                       ListOfCountriesRepository listOfCountriesRepository,
-                      FileStorageService fileStorageService) {
+                      FileStorageService fileStorageService,
+                      EmailService emailService,
+                      UserHobbyRepository userHobbyRepository,
+                      UserContactRepository userContactRepository,
+                      UserActivityStatsRepository userActivityStatsRepository,
+                      UserReputationRepository userReputationRepository,
+                      ObjectMapper objectMapper) {
         this.secretKey = secretKey;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.requestLogger = requestLogger;
@@ -88,6 +117,12 @@ public class UserService {
         this.listOfCitiesRepository = listOfCitiesRepository;
         this.listOfCountriesRepository = listOfCountriesRepository;
         this.fileStorageService = fileStorageService;
+        this.emailService = emailService;
+        this.userHobbyRepository = userHobbyRepository;
+        this.userContactRepository = userContactRepository;
+        this.userActivityStatsRepository = userActivityStatsRepository;
+        this.userReputationRepository = userReputationRepository;
+        this.objectMapper = objectMapper;
     }
 
     private User createNewUser(String email, String password, String firstName, String lastName) {
@@ -134,6 +169,8 @@ public class UserService {
             Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
             requestLogger.logRequest(HttpStatus.CREATED, currentTime, method, url, requestId, clientIp, executionTime,
                     registrationRequest, response);
+            emailService.sendWelcomeEmail(user.getEmail(),language);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (UserAlreadyExistsException e) {
@@ -158,6 +195,11 @@ public class UserService {
         return listOfSportsRepository.findByLanguage(columnName);
     }
 
+    @Cacheable(value = "sportAttributeModels", key = "#sportId")
+    public String getAttrModelBySport(int sportId, String language) {
+        return listOfSportsRepository.findBySportId(sportId);
+    }
+
     @Cacheable(value = "skills", key = "#language")
     public List<SkillsDTO> getListOfSkills(String language) {
         String columnName = Language.getColumnNameByCode(language);
@@ -176,23 +218,55 @@ public class UserService {
         return listOfCountriesRepository.findByLanguage(columnName);
     }
 
-    public UserAdditionalInfo  registerUser(long userId, String hobbies, List<FavoriteSport> favoriteSportList,
-                                           int currentLocationCityId, int currentLocationCountryId, String bio, String profilePictureUrl) {
-
-
-
-
+    @Transactional
+    public UserAdditionalInfo registerUser(Long userId, String hobbies, List<FavoriteSport> favoriteSportList,
+                                         Integer currentLocationCityId, Integer currentLocationCountryId, String bio,
+                                         String gender, LocalDate birthDate, String availability, String lookingFor, Boolean openToNewConnections, String contacts) {
+        // Create UserAdditionalInfo
         UserAdditionalInfo userAddInfo = new UserAdditionalInfo();
         userAddInfo.setUserId(userId);
         userAddInfo.setHobbies(hobbies);
-        userAddInfo.setFavoriteSports(FavoriteSport.toJson(favoriteSportList));
+        userAddInfo.setFavoriteSports(favoriteSportList);
         userAddInfo.setCurrentLocationCityId(currentLocationCityId);
         userAddInfo.setCurrentLocationCountryId(currentLocationCountryId);
         userAddInfo.setBio(bio);
-        userAddInfo.setProfilePictureUrl(profilePictureUrl);
-        System.out.println(userAddInfo.getFavoriteSports());
+        userAddInfo.setGender(gender);
+        userAddInfo.setBirthDate(birthDate);
+        userAddInfo.setAvailability(availability);
+        userAddInfo.setLookingFor(lookingFor);
+        userAddInfo.setOpenToNewConnections(openToNewConnections);
+        userAdditionalInfoRepository.save(userAddInfo);
 
-        return userAdditionalInfoRepository.save(userAddInfo);
+        // Save hobbies
+        if (hobbies != null && !hobbies.isEmpty()) {
+            Arrays.stream(hobbies.split(","))
+                  .map(String::trim)
+                  .forEach(hobby -> userHobbyRepository.save(new UserHobby(userId, hobby)));
+        }
+
+        // Save contacts
+        if (contacts != null) {
+            try {
+                UserContact userContact = objectMapper.readValue(contacts, UserContact.class);
+                userContact.setUserId(userId);
+                userContactRepository.save(userContact);
+            } catch (Exception e) {
+                log.error("Error saving user contacts for userId: {}", userId, e);
+            }
+        }
+
+        // Initialize activity stats
+        UserActivityStats activityStats = new UserActivityStats();
+        activityStats.setUserId(userId);
+//        activityStats.setLastActive(LocalDateTime.now());
+        userActivityStatsRepository.save(activityStats);
+
+        // Initialize reputation
+        UserReputation reputation = new UserReputation();
+        reputation.setUserId(userId);
+        userReputationRepository.save(reputation);
+
+        return userAddInfo;
     }
 
     public ResponseEntity<Response> getToken(String email, String password) {
@@ -231,13 +305,33 @@ public class UserService {
 
     public ResponseEntity<Response> validateTokenAndGetSubject(String accessToken, String refreshToken,String language) {
         try {
+            if(accessToken.equalsIgnoreCase("SYSTEM")&&refreshToken.equalsIgnoreCase("SYSTEM")) {
+                return ResponseEntity.status(HttpStatus.OK)
+                        .body(new Response(200, "OK", "System"));
+            }
+            if (accessToken == null || accessToken.isEmpty()) {
+                log.warn("Access token is null or empty");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new Response(400, "TOKEN_MISSING", "Access token is required"));
+            }
+
             String decryptedToken = TokenSecurity.decryptToken(accessToken, secretKey);
+            if (decryptedToken == null) {
+                log.warn("Failed to decrypt token");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new Response(401, "TOKEN_DECRYPTION_ERROR", "Failed to decrypt token"));
+            }
+
             Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
+            if (claims == null) {
+                log.warn("Failed to extract claims from token");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new Response(401, "TOKEN_PARSE_ERROR", "Failed to parse token"));
+            }
 
             if (claims.getSubject() != null) {
-
-                User user = !claims.getSubject().equals("GUEST")?
-                        userRepository.getUserInfoByEmail((claims.getSubject())):null;
+                User user = !claims.getSubject().equals("GUEST") ?
+                        userRepository.getUserInfoByEmail((claims.getSubject())) : null;
 
                 Optional<UserAdditionalInfo> userAddInfo = user != null ?
                         userAdditionalInfoRepository.findById(user.getUserId()) :
@@ -246,48 +340,112 @@ public class UserService {
                 return ResponseEntity.status(HttpStatus.OK)
                         .body(new Response(200, "OK", additionalInfo));
             } else {
-                log.warn("Пустой subject в токене. Токен: {}", accessToken);
+                log.warn("Empty subject in token");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new Response(400, "TOKEN_VALIDATION_ERROR", "Произошла ошибка при получении данных из токена."));
+                        .body(new Response(400, "TOKEN_VALIDATION_ERROR", "Token subject is empty"));
             }
 
         } catch (ExpiredJwtException e) {
-            log.warn("Токен истёк: {}", accessToken, e);
+            log.warn("Token expired: {}", accessToken, e);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new Response(401, "TOKEN_EXPIRED", "Срок действия токена истёк"));
+                    .body(new Response(401, "TOKEN_EXPIRED", "Token has expired"));
+        } catch (SignatureException e) {
+            log.warn("Invalid token signature: {}", accessToken, e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new Response(401, "TOKEN_SIGNATURE_ERROR", "Invalid token signature"));
+        } catch (MalformedJwtException e) {
+            log.warn("Malformed token: {}", accessToken, e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new Response(401, "TOKEN_MALFORMED", "Token is malformed"));
         } catch (JwtException e) {
-            log.warn("Ошибка валидации токена: {}", accessToken, e);
+            log.warn("Token validation error: {}", accessToken, e);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new Response(401, "TOKEN_VALIDATION_ERROR", "Произошла ошибка при получении данных из токена."));
+                    .body(new Response(401, "TOKEN_VALIDATION_ERROR", "Token validation failed"));
         } catch (Exception e) {
-            log.error("Непредвиденная ошибка при валидации токена: {}", accessToken, e);
+            log.error("Unexpected error during token validation: {}", accessToken, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new Response(500, "TOKEN_ERROR", "Непредвиденная ошибка"));
+                    .body(new Response(500, "TOKEN_ERROR", "Unexpected error during token validation: " + e.getMessage()));
         }
     }
 
-    private static Map<String, Object> getStringObjectMap(User user, Optional<UserAdditionalInfo> userAddInfo) {
-        Map<String, Object> additionalInfo = new HashMap<>();
+    private Map<String, Object> getStringObjectMap(User user, Optional<UserAdditionalInfo> userAddInfo) {
+        if (user == null) {
+            return Map.of(
+                "userId", 0,
+                "firstName", "GUEST",
+                "lastName", "GUEST",
+                "email", "GUEST",
+                "role", "GUEST",
+                "profilePictureUrl", ""
+            );
+        }
 
-        additionalInfo.put("userId", user !=null? user.getUserId():0);
-        additionalInfo.put("firstName", user !=null? user.getFirstName():"GUEST");
-        additionalInfo.put("lastName", user !=null? user.getLastName():"GUEST");
-        additionalInfo.put("email", user !=null? user.getEmail():"GUEST");
-        additionalInfo.put("role", user !=null?"USER":"GUEST");
-        additionalInfo.put("isEmailVerified", user != null && user.isEmailVerified());
-        additionalInfo.put("city", user != null ? userAddInfo.map(info -> info.getCurrentLocationCityId()).orElse(0)
-                : 0);
-        additionalInfo.put("hobbies", user != null ? userAddInfo.map(info -> info.getHobbies()).orElse("No hobbies")
-                : "No hobbies");
-        additionalInfo.put("bio", user != null ? userAddInfo.map(info -> info.getBio()).orElse("No bio")
-                : "No bio");
-        additionalInfo.put("profile_picture_url", user != null ? userAddInfo.map(info -> info.getProfilePictureUrl()).orElse("")
-                : "");
-        additionalInfo.put("favoriteSports", user != null ? userAddInfo.map(info -> {
-            Object sports = info.getFavoriteSportObjects();
-            return sports != null ? sports : new ArrayList<>();
-        }).orElse(new ArrayList<>()) : new ArrayList<>());
-        return additionalInfo;
+        UserInfoResponse response = UserInfoResponse.builder()
+            .userId(user.getUserId())
+            .firstName(user.getFirstName())
+            .lastName(user.getLastName())
+            .email(user.getEmail())
+            .role("USER")
+            .isEmailVerified(user.isEmailVerified())
+            .profilePictureUrl("")
+            .build();
+
+        if (userAddInfo.isPresent()) {
+            UserAdditionalInfo info = userAddInfo.get();
+            response.setHobbies(Arrays.asList(info.getHobbies().split(",")));
+            response.setFavoriteSports(info.getFavoriteSports());
+            response.setBio(info.getBio());
+            response.setGender(info.getGender());
+            response.setBirthDate(info.getBirthDate());
+            response.setCity(info.getCurrentLocationCityId() != null ? info.getCurrentLocationCityId().longValue() : null);
+            response.setCountry(info.getCurrentLocationCountryId() != null ? info.getCurrentLocationCountryId().longValue() : null);
+            
+            // Fix availability deserialization
+            try {
+                if (info.getAvailability() != null) {
+                    Map<String, Object> availabilityMap = objectMapper.readValue(
+                        info.getAvailability(), 
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                    );
+                    response.setAvailability(availabilityMap);
+                }
+            } catch (Exception e) {
+                log.error("Error deserializing availability for user {}: {}", user.getUserId(), e.getMessage());
+                response.setAvailability(null);
+            }
+            
+            response.setLookingFor(info.getLookingFor());
+            response.setOpenToNewConnections(info.getOpenToNewConnections());
+            response.setDateRegistered(user.getRegistrationDate());
+            response.setProfilePictureUrl(info.getProfilePictureUrl() != null ? info.getProfilePictureUrl() : "");
+
+            // Add contacts
+            UserContact contacts = userContactRepository.findByUserId(user.getUserId());
+            if (contacts != null) {
+                response.setContacts(Map.of(
+                    "telegram", contacts.getTelegram(),
+                    "instagram", contacts.getInstagram()
+                ));
+            }
+
+            // Add activity stats from EventsService
+            UserEventStatisticsDTO stats = eventsService.getUserEventStatistics(user.getUserId());
+            response.setActivityStats(ActivityStatsDTO.builder()
+                .eventsPlayed(stats.getEventsAsParticipant())
+                .eventsOrganized(stats.getEventsAsOrganizer())
+                .build());
+
+            // Add reputation
+            UserReputation reputation = userReputationRepository.findByUserId(user.getUserId());
+            if (reputation != null) {
+                response.setReputation(ReputationDTO.builder()
+                    .rating(reputation.getRating().doubleValue())
+                    .reviewsCount(reputation.getReviewsCount())
+                    .build());
+            }
+        }
+
+        return objectMapper.convertValue(response, Map.class);
     }
 
     public ResponseEntity<Response> refreshToken(String refreshToken,String language) {
@@ -322,25 +480,103 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<Response> registrationAddInfo(String clientIp,String url,String method,String requestId,
-                                                        long currentTime,long executionTime,String language,
-                                                        RegistrationAddInfoRequest registrationAddInfoRequest) {
+    private UserAdditionalInfo updateUserInfo(Long userId, String hobbies, List<FavoriteSport> favoriteSportList,
+                                           Integer currentLocationCityId, Integer currentLocationCountryId, String bio) {
+        Optional<UserAdditionalInfo> existingInfo = userAdditionalInfoRepository.findById(userId);
+        UserAdditionalInfo userAddInfo;
+        if (existingInfo.isPresent()) {
+            userAddInfo = existingInfo.get();
+            log.info("Updating existing user additional info for userId: {}", userId);
+        } else {
+            log.info("Creating new user additional info for userId: {}", userId);
+            userAddInfo = new UserAdditionalInfo();
+            userAddInfo.setUserId(userId);
+        }
+        if (hobbies != null) {
+            userAddInfo.setHobbies(hobbies);
+        }
+        if (favoriteSportList != null) {
+            log.info("Updating favorite sports for userId: {}. New sports list: {}", userId, favoriteSportList);
+            userAddInfo.setFavoriteSports(favoriteSportList);
+        }
+        if (currentLocationCityId != null && currentLocationCityId > 0) {
+            userAddInfo.setCurrentLocationCityId(currentLocationCityId);
+        }
+        if (currentLocationCountryId != null && currentLocationCountryId > 0) {
+            userAddInfo.setCurrentLocationCountryId(currentLocationCountryId);
+        }
+        if (bio != null) {
+            userAddInfo.setBio(bio);
+        }
+        return userAdditionalInfoRepository.save(userAddInfo);
+    }
+
+    @Transactional
+    public ResponseEntity<Response> updateAddInfo(String clientIp, String url, String method, String requestId,
+                                                long currentTime, long executionTime, String language,
+                                                RegistrationAddInfoRequest registrationAddInfoRequest) {
         try {
+            UserAdditionalInfo user = userAdditionalInfoRepository.findById(registrationAddInfoRequest.getUserId())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
 
-            UserAdditionalInfo user = registerUser(registrationAddInfoRequest.getUserId(),
-                    registrationAddInfoRequest.getHobbies(),registrationAddInfoRequest.getFavoriteSports(),
-                    registrationAddInfoRequest.getCurrentLocationCityId(),registrationAddInfoRequest.getCurrentLocationCountryId(),
-                    registrationAddInfoRequest.getBio(),registrationAddInfoRequest.getProfilePictureUrl());
+            // Update basic info
+            user.setHobbies(registrationAddInfoRequest.getHobbies());
+            user.setFavoriteSports(registrationAddInfoRequest.getFavoriteSports());
+            user.setCurrentLocationCityId(registrationAddInfoRequest.getCurrentLocationCityId());
+            user.setCurrentLocationCountryId(registrationAddInfoRequest.getCurrentLocationCountryId());
+            user.setBio(registrationAddInfoRequest.getBio());
+            user.setGender(registrationAddInfoRequest.getGender());
+            user.setBirthDate(registrationAddInfoRequest.getBirthDate());
+            user.setAvailability(registrationAddInfoRequest.getAvailability());
+            user.setLookingFor(registrationAddInfoRequest.getLookingFor());
+            user.setOpenToNewConnections(registrationAddInfoRequest.getOpenToNewConnections());
 
-            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
-            logger.logRequestDetails(HttpStatus.CREATED,currentTime,method,url,requestId,clientIp,executionTime,registrationAddInfoRequest,response);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            // Update hobbies
+            userHobbyRepository.deleteByUserId(user.getUserId());
+            if (registrationAddInfoRequest.getHobbies() != null && !registrationAddInfoRequest.getHobbies().isEmpty()) {
+                String[] hobbies = registrationAddInfoRequest.getHobbies().split(",");
+                for (String hobby : hobbies) {
+                    UserHobby userHobby = new UserHobby();
+                    userHobby.setUserId(user.getUserId());
+                    userHobby.setHobby(hobby.trim());
+                    userHobbyRepository.save(userHobby);
+                }
+            }
 
-        } catch (Exception e) {
-            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "SOMETHING_WRONG",
-                    "Error during processing, try again");
-            logger.logRequestDetails(HttpStatus.BAD_REQUEST,currentTime,method,url,requestId,clientIp,executionTime,registrationAddInfoRequest,e);
+            // Update contacts
+            if (registrationAddInfoRequest.getContacts() != null) {
+                try {
+                    UserContact userContact = objectMapper.readValue(registrationAddInfoRequest.getContacts(), UserContact.class);
+                    userContact.setUserId(user.getUserId());
+                    userContactRepository.save(userContact);
+                } catch (Exception e) {
+                    log.error("Error updating contacts for user {}: {}", user.getUserId(), e.getMessage());
+                    throw new RuntimeException("Invalid contacts format: " + e.getMessage());
+                }
+            }
+
+            // Save the updated user info
+            userAdditionalInfoRepository.save(user);
+
+            Response response = new Response(HttpStatus.OK.value(), "USER_UPDATED_SUCCESSFULLY", user.getUserId());
+            logger.logRequestDetails(HttpStatus.OK, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, response);
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            log.error("Error updating user info: {}", e.getMessage(), e);
+            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "UPDATE_ERROR",
+                    "Error during update: " + e.getMessage());
+            logger.logRequestDetails(HttpStatus.BAD_REQUEST, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        } catch (Exception e) {
+            log.error("Unexpected error updating user info: {}", e.getMessage(), e);
+            Response response = new Response(HttpStatus.INTERNAL_SERVER_ERROR.value(), "UPDATE_ERROR",
+                    "Unexpected error during update: " + e.getMessage());
+            logger.logRequestDetails(HttpStatus.INTERNAL_SERVER_ERROR, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
@@ -362,7 +598,7 @@ public class UserService {
                     ? userRepository.getUserInfoByEmail(loginRequest.getEmail()).getPasswordHash()
                     : passwordEncoder.encode("GUEST");
             if (passwordEncoder.matches(loginRequest.getPassword(), storedHashedPassword)) {
-                Response responseToken = getToken(loginRequest.getEmail(), loginRequest.getPassword()).getBody();
+                Response responseToken =    getToken(loginRequest.getEmail(), loginRequest.getPassword()).getBody();
                 assert responseToken != null;
                 Response response = new Response(HttpStatus.OK.value(), "User log in successfully",
                         responseToken.getTokenInfo());
@@ -383,23 +619,21 @@ public class UserService {
         }
     }
 
+    @Transactional
     public ResponseEntity<Response> uploadProfilePicture(MultipartFile file, Long userId) {
         try {
-            // Проверяем существование пользователя'
-            log.info("Полученный userID при смене аватара {}",userId);
+            log.info("Полученный userID при смене аватара {}", userId);
             Optional<UserAdditionalInfo> userInfo = userAdditionalInfoRepository.findById(userId);
             if (!userInfo.isPresent()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(new Response(404, "USER_NOT_FOUND", "User not found"));
             }
-
-            // Загружаем файл в локальное хранилище
             String fileUrl = fileStorageService.uploadFile(file, "profile-pictures");
             
-            // Обновляем URL в базе данных
-            UserAdditionalInfo info = userInfo.get();
-            info.setProfilePictureUrl(fileUrl);
-            userAdditionalInfoRepository.save(info);
+            // Обновляем URL профильной картинки в базе данных
+            UserAdditionalInfo userAdditionalInfo = userInfo.get();
+            userAdditionalInfo.setProfilePictureUrl(fileUrl);
+            userAdditionalInfoRepository.save(userAdditionalInfo);
             
             return ResponseEntity.ok(new Response(200, "PROFILE_PICTURE_UPDATED", fileUrl));
         } catch (Exception e) {
@@ -407,6 +641,181 @@ public class UserService {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new Response(500, "UPLOAD_ERROR", "Error uploading file"));
         }
+    }
+
+    @Transactional
+    public ResponseEntity<Response> registrationAddInfo(String clientIp, String url, String method, String requestId,
+                                                      long currentTime, long executionTime, String language,
+                                                      RegistrationAddInfoRequest registrationAddInfoRequest) {
+        try {
+            log.info("Starting registration of additional info for user ID: {}", registrationAddInfoRequest.getUserId());
+            
+            // Check if user exists
+            if (!userRepository.existsById(registrationAddInfoRequest.getUserId())) {
+                log.error("User not found with ID: {}", registrationAddInfoRequest.getUserId());
+                Response response = new Response(HttpStatus.NOT_FOUND.value(), "USER_NOT_FOUND", 
+                    "User with ID " + registrationAddInfoRequest.getUserId() + " not found");
+                logger.logRequestDetails(HttpStatus.NOT_FOUND, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, response);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            // Create UserAdditionalInfo
+            final UserAdditionalInfo userAddInfo = new UserAdditionalInfo();
+            userAddInfo.setUserId(registrationAddInfoRequest.getUserId());
+            userAddInfo.setHobbies(registrationAddInfoRequest.getHobbies());
+            userAddInfo.setFavoriteSports(registrationAddInfoRequest.getFavoriteSports());
+            userAddInfo.setCurrentLocationCityId(registrationAddInfoRequest.getCurrentLocationCityId());
+            userAddInfo.setCurrentLocationCountryId(registrationAddInfoRequest.getCurrentLocationCountryId());
+            userAddInfo.setBio(registrationAddInfoRequest.getBio());
+            userAddInfo.setGender(registrationAddInfoRequest.getGender());
+            userAddInfo.setBirthDate(registrationAddInfoRequest.getBirthDate());
+            userAddInfo.setAvailability(registrationAddInfoRequest.getAvailability());
+            userAddInfo.setLookingFor(registrationAddInfoRequest.getLookingFor());
+            userAddInfo.setOpenToNewConnections(registrationAddInfoRequest.getOpenToNewConnections());
+            userAddInfo.setLastLogin(LocalDateTime.now());
+            
+            // Save UserAdditionalInfo
+            userAdditionalInfoRepository.save(userAddInfo);
+            log.info("Saved UserAdditionalInfo for user ID: {}", userAddInfo.getUserId());
+
+            // Save hobbies
+            if (registrationAddInfoRequest.getHobbies() != null && !registrationAddInfoRequest.getHobbies().isEmpty()) {
+                Arrays.stream(registrationAddInfoRequest.getHobbies().split(","))
+                      .map(String::trim)
+                      .forEach(hobby -> {
+                          UserHobby userHobby = new UserHobby(userAddInfo.getUserId(), hobby);
+                          userHobbyRepository.save(userHobby);
+                          log.debug("Saved hobby: {} for user ID: {}", hobby, userAddInfo.getUserId());
+                      });
+            }
+
+            // Save contacts
+            if (registrationAddInfoRequest.getContacts() != null) {
+                try {
+                    UserContact userContact = objectMapper.readValue(registrationAddInfoRequest.getContacts(), UserContact.class);
+                    userContact.setUserId(userAddInfo.getUserId());
+                    userContactRepository.save(userContact);
+                    log.info("Saved contacts for user ID: {}", userAddInfo.getUserId());
+                } catch (Exception e) {
+                    log.error("Error saving user contacts for userId: {}", userAddInfo.getUserId(), e);
+                    throw new RuntimeException("Invalid contacts format: " + e.getMessage());
+                }
+            }
+
+            // Initialize activity stats
+            UserActivityStats activityStats = new UserActivityStats();
+            activityStats.setUserId(userAddInfo.getUserId());
+//            activityStats.setLastActive(LocalDateTime.now());
+            userActivityStatsRepository.save(activityStats);
+            log.info("Initialized activity stats for user ID: {}", userAddInfo.getUserId());
+
+            // Initialize reputation
+            UserReputation reputation = new UserReputation();
+            reputation.setUserId(userAddInfo.getUserId());
+            userReputationRepository.save(reputation);
+            log.info("Initialized reputation for user ID: {}", userAddInfo.getUserId());
+
+            Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", userAddInfo.getUserId());
+            logger.logRequestDetails(HttpStatus.CREATED, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            log.error("Error during registration of additional info: {}", e.getMessage(), e);
+            Response response = new Response(HttpStatus.BAD_REQUEST.value(), "REGISTRATION_ERROR",
+                    "Error during registration: " + e.getMessage());
+            logger.logRequestDetails(HttpStatus.BAD_REQUEST, currentTime, method, url, requestId, clientIp, executionTime,
+                    registrationAddInfoRequest, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    // Getter for userRepository
+    public UserRepository getUserRepository() {
+        return userRepository;
+    }
+
+    public ResponseEntity<?> checkEmailVerificationStatus(String email, String language) {
+        Map<String, Object> response = new HashMap<>();
+        Map<String, String> messages = Map.of(
+            "ru", "Email не подтвержден. Пожалуйста, проверьте вашу почту или запросите новый код подтверждения.",
+            "en", "Email is not verified. Please check your inbox or request a new verification code.",
+            "uz", "Email tasdiqlanmagan. Iltimos, pochtangizni tekshiring yoki yangi tasdiqlash kodini so'rang."
+        );
+        
+        try {
+            Optional<User> userOptional = userRepository.findByEmail(email);
+            if (userOptional.isEmpty()) {
+                response.put("status", "error");
+                response.put("message", "User not found");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            User user = userOptional.get();
+            response.put("status", "success");
+            response.put("isVerified", user.isEmailVerified());
+            
+            if (!user.isEmailVerified()) {
+                response.put("message", messages.getOrDefault(language, messages.get("ru")));
+            }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error checking email verification status for email: {}", email, e);
+            response.put("status", "error");
+            response.put("message", "Internal server error");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    public ResponseEntity<Response> getUserProfile(Long userId, String language) {
+        try {
+            Optional<User> userOptional = userRepository.findById(userId);
+            if (userOptional.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new Response(404, "USER_NOT_FOUND", "User not found"));
+            }
+
+            User user = userOptional.get();
+            Optional<UserAdditionalInfo> userAddInfo = userAdditionalInfoRepository.findById(userId);
+            
+            Map<String, Object> userProfile = getStringObjectMap(user, userAddInfo);
+            
+            // Remove sensitive information
+            userProfile.remove("email");
+            userProfile.remove("isEmailVerified");
+            userProfile.remove("role");
+            
+            return ResponseEntity.ok(new Response(200, "OK", userProfile));
+        } catch (Exception e) {
+            log.error("Error getting user profile for userId: {}", userId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new Response(500, "INTERNAL_SERVER_ERROR", "Error retrieving user profile"));
+        }
+    }
+
+    @Cacheable(value = "userProfilePictures", key = "#userIds")
+    public Map<Long, String> getUsersProfilePicturesForChat(List<Long> userIds) {
+        Map<Long, String> userAvatars = new HashMap<>();
+        try {
+            List<UserAdditionalInfo> userInfos = userAdditionalInfoRepository.findAllById(userIds);
+            for (UserAdditionalInfo info : userInfos) {
+                userAvatars.put(info.getUserId(), info.getProfilePictureUrl() != null ? info.getProfilePictureUrl() : "");
+            }
+        } catch (Exception e) {
+            log.error("Error getting user profile pictures for chat: {}", e.getMessage());
+        }
+        return userAvatars;
+    }
+
+    @CacheEvict(value = "userProfilePictures", allEntries = true)
+    public void clearUserProfilePicturesCache() {
+        // Method to clear cache when needed
+    }
+
+    @CacheEvict(value = "userProfilePictures", key = "#userId")
+    public void clearUserProfilePictureCache(Long userId) {
+        // Method to clear specific user's cache
     }
 }
 

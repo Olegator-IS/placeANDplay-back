@@ -1,8 +1,14 @@
 package com.is.events.scheduler;
 
+import com.is.auth.service.EmailService;
 import com.is.events.model.Event;
+import com.is.events.model.enums.EventMessageType;
 import com.is.events.model.enums.EventStatus;
 import com.is.events.repository.EventsRepository;
+import com.is.events.service.WebSocketService;
+import com.is.events.service.EventMessageService;
+import com.is.places.model.Place;
+import com.is.places.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,41 +24,49 @@ import java.util.List;
 public class EventScheduler {
 
     private final EventsRepository eventsRepository;
+    private final WebSocketService webSocketService;
+    private final EventMessageService eventMessageService;
+    private final PlaceRepository placeRepository;
+    private final EmailService emailService;
 
     @Scheduled(fixedRate = 600000) // 600000 ms = 10 минут
     @Transactional
     public void checkEvents() {
         LocalDateTime now = LocalDateTime.now();
-        log.info("Starting events check at {}", now);
+        log.info("Starting scheduled event check at {}", now);
 
         try {
-            // Проверяем все OPEN события
-            List<Event> openEvents = eventsRepository.findByStatus(EventStatus.OPEN.name());
+            List<Event> events = eventsRepository.findAll();
             
-            if (!openEvents.isEmpty()) {
-                log.info("Found {} open events to check", openEvents.size());
-                
-                openEvents.forEach(event -> {
-                    try {
-                        // Если время события прошло, переводим в EXPIRED
-                        if (event.getDateTime().isBefore(now)) {
-                            event.setStatus(EventStatus.EXPIRED.name());
-                            eventsRepository.save(event);
-                            log.info("Updated event {} status to EXPIRED. Event time was: {}", 
-                                event.getEventId(), event.getDateTime());
-                        } else {
-                            log.debug("Event {} is still valid. Current time: {}, Event time: {}", 
-                                event.getEventId(), now, event.getDateTime());
+            events.forEach(event -> {
+                try {
+                    if (event.getDateTime().isBefore(now)) {
+                        if (event.getStatus() == EventStatus.PENDING_APPROVAL ||
+                            event.getStatus() == EventStatus.CHANGES_REQUESTED) {
+                            event.forceExpire(); // Новый метод для принудительного перевода в EXPIRED
+                            Event savedEvent = eventsRepository.save(event);
+                            
+                            // Отправляем системное сообщение о просрочке события
+                            eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_EXPIRED, null, "ru");
+                            
+                            // Отправляем уведомление через WebSocket
+                            webSocketService.notifyEventUpdate(event.getPlaceId());
+                            webSocketService.sendEventUpdate(savedEvent);
+
+                            Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+
+
+                            emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
+                            
+                            log.info("Event {} expired due to time", event.getEventId());
                         }
-                    } catch (Exception e) {
-                        log.error("Error checking event {}", event.getEventId(), e);
                     }
-                });
-            } else {
-                log.info("No open events found to check");
-            }
+                } catch (Exception e) {
+                    log.error("Error checking event {}: {}", event.getEventId(), e.getMessage());
+                }
+            });
         } catch (Exception e) {
-            log.error("Error during events check", e);
+            log.error("Error in scheduled event check: {}", e.getMessage());
         }
     }
 } 

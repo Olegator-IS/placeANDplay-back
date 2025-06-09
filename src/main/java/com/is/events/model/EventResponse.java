@@ -29,7 +29,7 @@ public class EventResponse {
         this.sportEvent = event.getSportEvent();
         this.organizerEvent = event.getOrganizerEvent();
         this.currentParticipants = Collections.singletonList(event.getCurrentParticipants());
-        this.status = event.getStatus();
+        this.status = String.valueOf(event.getStatus());
         this.description = event.getDescription();
         this.skillLevel = event.getSkillLevel();
         this.dateTime = event.getDateTime();

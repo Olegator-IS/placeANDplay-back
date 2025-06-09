@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: events-service
+
+server:
+  port: 8080
+
+app:
+  websocket:
+    allowed-origins: 
+      - http://localhost:3000
+      - http://localhost:8080
+      - https://placeandplay.uz
+      - http://placeandplay.uz/
+      - http://95.46.96.94:8080
+      - https://95.46.96.94:8080
+    message-size-limit: 128
+    send-buffer-size-limit: 512
+    send-time-limit: 20000
+    time-to-first-message: 30000
+
+logging:
+  level:
+    org.springframework.web.socket: DEBUG
+    com.is.events: DEBUG 

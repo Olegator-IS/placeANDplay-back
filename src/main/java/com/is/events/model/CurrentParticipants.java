@@ -19,10 +19,10 @@ public class CurrentParticipants implements Serializable {
     public static class Participant implements Serializable {
         @JsonProperty("participantId")
         private Long participantId;
-        
+
         @JsonProperty("participantName")
         private String participantName;
-        
+
         @JsonProperty("status")
         private String status;
 
@@ -66,5 +66,13 @@ public class CurrentParticipants implements Serializable {
             participants.removeIf(p -> p.getParticipantId().equals(participantId));
             size = participants.size();
         }
+    }
+
+    public String getParticipantName(Long participantId) {
+        return participants.stream()
+                .filter(p -> p.getParticipantId().equals(participantId))
+                .map(Participant::getParticipantName)
+                .findFirst()
+                .orElse("Unknown Participant");
     }
 }

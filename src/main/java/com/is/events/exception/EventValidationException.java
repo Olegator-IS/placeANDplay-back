@@ -1,9 +1,14 @@
 package com.is.events.exception;
 
-import org.springframework.http.HttpStatus;
+public class EventValidationException extends RuntimeException {
+    private final String code;
 
-public class EventValidationException extends EventException {
-    public EventValidationException(String messageKey, String message) {
-        super(messageKey, message, HttpStatus.BAD_REQUEST);
+    public EventValidationException(String code, String message) {
+        super(message);
+        this.code = code;
+    }
+
+    public String getCode() {
+        return code;
     }
 } 

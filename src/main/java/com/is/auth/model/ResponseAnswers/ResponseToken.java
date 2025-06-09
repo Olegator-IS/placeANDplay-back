@@ -14,10 +14,10 @@ public class ResponseToken {
 
     @ApiModelProperty(value = "Status", example = "200")
     private int status;
-    @ApiModelProperty(value = "Message", example = "BUH240")
-    private Object message;
-    @ApiModelProperty(value = "Result", example = "OK")
-    private Object result;
+    @ApiModelProperty(value = "accessToken", example = "ZRcasdasda")
+    private Object accessToken;
+    @ApiModelProperty(value = "refreshToken", example = "ZRcadasd")
+    private Object refreshToken;
 //    @ApiModelProperty(value = "AdditionalInfo", example = "{" +
 //            "    \"user_id\": '1'," +
 //            "    \"first_name\": \"'Oleg'\"," +
@@ -31,11 +31,11 @@ public class ResponseToken {
 
     }
 
-    public ResponseToken(int status, Object message, Object result) {
+    public ResponseToken(int status, Object accessToken, Object refreshToken) {
         super();
         this.status = status;
-        this.message = message;
-        this.result = result;
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
 
     }
 
