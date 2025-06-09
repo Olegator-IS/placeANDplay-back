@@ -31,6 +31,8 @@
 ./gradlew bootRun
 Или через IntelliJ IDEA → класс PlaceAndPlayApplication.java
 
+---
+
 ## 📁 Основные директории
 src/
 ├── config/         # Настройки безопасности и CORS
