@@ -40,4 +40,5 @@ src/
 ├── model/          # DTO и сущности
 ├── repository/     # JPA-репозитории
 ├── service/        # Бизнес-логика
+---
 
