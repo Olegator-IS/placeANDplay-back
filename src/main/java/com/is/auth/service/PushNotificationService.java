@@ -8,6 +8,8 @@ import com.is.auth.repository.UserFcmTokenRepository;
 import com.is.events.model.Event;
 import com.is.events.model.EventParticipant;
 import com.is.events.model.enums.EventStatus;
+import com.is.places.model.Place;
+import com.is.places.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ public class PushNotificationService {
     
     private final FirebaseMessaging firebaseMessaging;
     private final UserFcmTokenRepository userFcmTokenRepository;
+    private final PlaceRepository placeRepository;
 
     // Уведомление о присоединении к ивенту
     public void sendParticipantJoinedNotification(Event event, EventParticipant participant) {
@@ -82,13 +85,16 @@ public class PushNotificationService {
     // Уведомление об изменении статуса ивента
     public void sendEventStatusChangeNotification(Event event, EventStatus newStatus) {
         try {
+
+            Place place = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+
             List<UserFcmToken> organizerTokens = userFcmTokenRepository.findByUserId(event.getOrganizerEvent().getOrganizerId());
             
             String title = "Статус события изменен";
             String body = switch (newStatus) {
-                case CONFIRMED -> String.format("Событие \"%s\" подтверждено организацией", event.getSportEvent().getSportName());
-                case REJECTED -> String.format("Событие \"%s\" отклонено организацией", event.getSportEvent().getSportName());
-                case CHANGES_REQUESTED -> String.format("Организация запросила изменения в событии \"%s\"", event.getSportEvent().getSportName());
+                case CONFIRMED -> String.format("Событие по игре в \"%s\" подтверждено организацией \"%s\" ", event.getSportEvent().getSportName(),place.getName());
+                case REJECTED -> String.format("Событие по игре \"%s\" отклонено организацией \"%s\" ", event.getSportEvent().getSportName(),place.getName());
+                case CHANGES_REQUESTED -> String.format("Организация \"%s\" запросила изменения в событии \"%s\"", place.getName(),event.getSportEvent().getSportName());
                 default -> String.format("Статус события \"%s\" изменен на %s", event.getSportEvent().getSportName(), newStatus);
             };
 

@@ -627,6 +627,10 @@ public class EmailService {
 
     public ResponseEntity<?> sendEventStatusChangeNotification(Event event, String lang, String placeName, String placePhone) {
         try {
+            // Add null check for placePhone
+            String safePlacePhone = placePhone != null ? placePhone : "+998 (XX) XXX-XX-XX";
+            String safePlaceName = placeName != null ? placeName : "Unknown Place";
+
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
@@ -892,6 +896,9 @@ public class EmailService {
             String subjectKey = "subject_" + event.getStatus().name().toLowerCase();
             String messageKey = event.getStatus().name().toLowerCase();
 
+            log.info("Processing event status change notification - Status: {}, Language: {}, Prefix: {}, MessageKey: {}", 
+                event.getStatus(), lang, prefix, messageKey);
+
             // Format date and time according to locale
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern(
                 switch (lang) {
@@ -902,17 +909,31 @@ public class EmailService {
             );
 
             String formattedDateTime = event.getDateTime().format(formatter);
+            String templateKey = prefix + "_" + messageKey;
+            String template = texts.get(templateKey);
+            
+            if (template == null) {
+                log.error("Missing template for status change notification - TemplateKey: {}, Available keys: {}", 
+                    templateKey, texts.keySet());
+                throw new IllegalStateException("Missing template for status: " + event.getStatus() + " and language: " + lang);
+            }
+
+            // Add null check for organizer name
+            String organizerName = event.getOrganizerEvent() != null && event.getOrganizerEvent().getOrganizerName() != null 
+                ? event.getOrganizerEvent().getOrganizerName() 
+                : "User";
+
             String statusMessage = switch (event.getStatus()) {
-                case REJECTED -> String.format(texts.get(prefix + "_rejected"), placeName, placePhone);
-                case CONFIRMED -> String.format(texts.get(prefix + "_confirmed"), placeName, formattedDateTime, placePhone);
-                case CHANGES_REQUESTED -> String.format(texts.get(prefix + "_changes"), placeName, placePhone);
-                case EXPIRED -> String.format(texts.get(prefix + "_expired"), placePhone);
-                case IN_PROGRESS -> String.format(texts.get(prefix + "_in_progress"), event.getOrganizerEvent().getOrganizerName());
-                case COMPLETED -> texts.get(prefix + "_completed");
+                case REJECTED -> String.format(template, safePlaceName, safePlacePhone);
+                case CONFIRMED -> String.format(template, safePlaceName, formattedDateTime, safePlacePhone);
+                case CHANGES_REQUESTED -> String.format(template, safePlaceName, safePlacePhone);
+                case EXPIRED -> String.format(template, safePlacePhone);
+                case IN_PROGRESS -> String.format(template, organizerName);
+                case COMPLETED -> template;
                 default -> "";
             };
 
-            // Prepare email content with the same template as event creation
+            // Prepare email content
             String content = String.format("""
                 <!DOCTYPE html>
                 <html>
@@ -1192,12 +1213,13 @@ public class EmailService {
                     default -> "#64748b";
                 },
                 texts.get(prefix + "_" + subjectKey),
-                String.format(texts.get(prefix + "_greeting"), event.getOrganizerEvent().getOrganizerName()),
+//                String.format(texts.get(prefix + "_greeting"), organizerName),
+//                    String.format(texts.get(prefix + "_greeting"), event.getOrganizerEvent().getOrganizerName()),
                 statusMessage,
                 texts.get(prefix + "_event_details"),
                 texts.get(prefix + "_name"), event.getSportEvent().getSportName(),
                 texts.get(prefix + "_datetime"), formattedDateTime,
-                texts.get(prefix + "_place"), placeName,
+                texts.get(prefix + "_place"), safePlaceName,
                 event.getEventId().toString(),
                 texts.get(prefix + "_button"),
                 texts.get(prefix + "_footer"),
