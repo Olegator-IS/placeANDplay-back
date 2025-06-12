@@ -7,11 +7,13 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -29,21 +31,38 @@ public class FcmTokenController {
             @ApiParam(value = "FCM token", required = true) @RequestParam String token,
             @ApiParam(value = "Device type (android/ios)", required = true) @RequestParam String deviceType) {
         try {
-            // Проверяем, существует ли уже такой токен
-            userFcmTokenRepository.findByUserId(userId).stream()
-                    .filter(t -> t.getToken().equals(token))
-                    .findFirst()
-                    .ifPresent(t -> userFcmTokenRepository.delete(t));
+            // Проверяем, существует ли уже такой токен у другого пользователя
+            Optional<UserFcmToken> existingToken = userFcmTokenRepository.findByToken(token);
+            if (existingToken.isPresent() && !existingToken.get().getUserId().equals(userId)) {
+                log.warn("Token {} is already registered for another user", token);
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "status", "token_conflict",
+                    "message", "Token is already registered for another user",
+                    "code", "TOKEN_CONFLICT"
+                ));
+            }
 
-            // Создаем новый токен
-            UserFcmToken fcmToken = UserFcmToken.builder()
-                    .userId(userId)
-                    .token(token)
-                    .deviceType(deviceType)
-                    .build();
-
-            userFcmTokenRepository.save(fcmToken);
-            log.info("Successfully registered FCM token for user {}", userId);
+            // Ищем существующий токен для пользователя
+            List<UserFcmToken> userTokens = userFcmTokenRepository.findByUserId(userId);
+            
+            if (!userTokens.isEmpty()) {
+                // Если у пользователя уже есть токен, обновляем его
+                UserFcmToken userToken = userTokens.get(0);
+                userToken.setToken(token);
+                userToken.setDeviceType(deviceType);
+                userFcmTokenRepository.save(userToken);
+                log.info("Successfully updated FCM token for user {}", userId);
+            } else {
+                // Если у пользователя нет токена, создаем новый
+                UserFcmToken fcmToken = UserFcmToken.builder()
+                        .userId(userId)
+                        .token(token)
+                        .deviceType(deviceType)
+                        .build();
+                userFcmTokenRepository.save(fcmToken);
+                log.info("Successfully registered new FCM token for user {}", userId);
+            }
+            
             return ResponseEntity.ok(Map.of(
                     "status", "success",
                     "message", "Token registered successfully"

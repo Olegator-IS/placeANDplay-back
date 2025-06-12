@@ -3,7 +3,6 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-resources/placeandplay-54ee6-firebase-adminsdk-fbsvc-0524d77263.json
 
 ### STS ###
 .apt_generated
