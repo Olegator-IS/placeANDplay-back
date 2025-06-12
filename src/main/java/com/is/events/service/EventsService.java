@@ -210,7 +210,8 @@ public class EventsService {
 
         emailService.sendEventCreated(event,lang,getPlace.getAddress(),getPlace.getName());
 
-
+        // Отправляем уведомления пользователям, у которых этот вид спорта в избранном
+        pushNotificationService.sendNewEventNotification(savedEvent);
 
         EventDTO resultDto = convertToDTO(savedEvent);
         resultDto.setFirstEventCreation(isFirstEventCreation);
