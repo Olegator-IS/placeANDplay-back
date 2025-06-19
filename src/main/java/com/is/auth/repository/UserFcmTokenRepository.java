@@ -31,7 +31,7 @@ public interface UserFcmTokenRepository extends JpaRepository<UserFcmToken, Long
 
 
     @Query(value = """
-            SELECT DISTINCT t.* FROM user_fcm_token t 
+            SELECT DISTINCT t.* FROM users.user_fcm_tokens t 
             WHERE t.user_id IN (
                 SELECT CAST((p->>'participantId') AS bigint) 
                 FROM events.events e,
