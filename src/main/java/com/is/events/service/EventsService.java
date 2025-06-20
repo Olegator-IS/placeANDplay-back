@@ -159,7 +159,7 @@ public class EventsService {
         }
 
         // Установка дополнительных полей
-        dto.setJoinable(event.getStatus() == EventStatus.PENDING_APPROVAL || event.getStatus() == EventStatus.CONFIRMED);
+        dto.setJoinable(event.getStatus() == EventStatus.OPEN || event.getStatus() == EventStatus.PENDING_APPROVAL || event.getStatus() == EventStatus.CONFIRMED);
         dto.setMaxParticipants(event.getSportEvent().getMaxParticipants());
         dto.setEventType(event.getSportEvent().getSportType());
         dto.setLocation(event.getSportEvent().getLocation());

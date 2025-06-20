@@ -315,4 +315,26 @@ public class FriendshipService {
         if (user == null || other == null) return false;
         return friendshipRepository.findByUsersAndStatus(user, other, FriendshipStatus.ACCEPTED).isPresent();
     }
+
+    public String getFriendshipStatus(Long userId, Long otherUserId) {
+        User user = userRepository.findById(userId).orElse(null);
+        User other = userRepository.findById(otherUserId).orElse(null);
+        if (user == null || other == null) return "not_friend";
+
+        // Проверка на блокировку
+        if (friendshipRepository.findByUsersAndStatus(user, other, com.is.friendship.model.enums.FriendshipStatus.BLOCKED).isPresent() ||
+            friendshipRepository.findByUsersAndStatus(other, user, com.is.friendship.model.enums.FriendshipStatus.BLOCKED).isPresent()) {
+            return "blocked";
+        }
+        // Проверка на дружбу
+        if (friendshipRepository.findByUsersAndStatus(user, other, com.is.friendship.model.enums.FriendshipStatus.ACCEPTED).isPresent()) {
+            return "already_friend";
+        }
+        // Проверка на pending (ожидание)
+        if (friendshipRepository.findByUsersAndStatus(user, other, com.is.friendship.model.enums.FriendshipStatus.PENDING).isPresent() ||
+            friendshipRepository.findByUsersAndStatus(other, user, com.is.friendship.model.enums.FriendshipStatus.PENDING).isPresent()) {
+            return "pending_request";
+        }
+        return "not_friend";
+    }
 } 

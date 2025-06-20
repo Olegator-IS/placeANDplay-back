@@ -131,7 +131,7 @@ public class FriendshipController {
     }
 
     @GetMapping("/is-friend")
-    public boolean isFriend(@RequestParam Long userId, @RequestParam Long otherUserId) {
-        return friendshipService.isFriend(userId, otherUserId);
+    public String isFriend(@RequestParam Long userId, @RequestParam Long otherUserId) {
+        return friendshipService.getFriendshipStatus(userId, otherUserId);
     }
 } 
