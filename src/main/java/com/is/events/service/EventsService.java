@@ -197,7 +197,7 @@ public class EventsService {
         }
 
         event.setFirstTimeEventCreation(isFirstEventCreation);
-        event.setStatus(EventStatus.PENDING_APPROVAL);
+        event.setStatus(EventStatus.OPEN);
         Event savedEvent = eventsRepository.save(event);
 
         // Отправляем системное сообщение о создании ивента
@@ -899,5 +899,18 @@ public class EventsService {
             case REJECTED, CONFIRMED, CHANGES_REQUESTED, IN_PROGRESS, COMPLETED, EXPIRED -> true;
             default -> false;
         };
+    }
+
+    @Transactional
+    public EventDTO moveToPendingApproval(Long eventId, Long userId, String lang) {
+        Event event = findAndValidateEvent(eventId, lang);
+        validateEventOrganizer(event, userId, lang);
+        if (event.getStatus() != EventStatus.OPEN) {
+            throw new EventValidationException("invalid_status_transition", "Можно перевести в ожидание подтверждения только из статуса OPEN");
+        }
+        event.setStatus(EventStatus.PENDING_APPROVAL);
+        Event savedEvent = eventsRepository.save(event);
+        // Можно добавить уведомления/логирование
+        return convertToDTO(savedEvent);
     }
 }

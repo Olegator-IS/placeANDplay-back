@@ -58,6 +58,9 @@ public class UserInfoResponse {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate birthDate;
 
+    @JsonProperty("birth_year")
+    private Integer birthYear;
+
     @JsonProperty("city")
     private Long city;
 

@@ -4,6 +4,7 @@ import java.util.Set;
 import java.util.EnumSet;
 
 public enum EventStatus {
+    OPEN("Открыто для регистрации"),
     PENDING_APPROVAL("Ожидает подтверждения"),
     CHANGES_REQUESTED("Требуются изменения"),
     REJECTED("Отклонено"),
@@ -29,6 +30,7 @@ public enum EventStatus {
 
     private static Set<EventStatus> getAllowedTransitions(EventStatus currentStatus) {
         return switch (currentStatus) {
+            case OPEN -> EnumSet.of(PENDING_APPROVAL, CANCELLED);
             case PENDING_APPROVAL -> EnumSet.of(
                 CONFIRMED,
                 REJECTED,

@@ -13,6 +13,7 @@ import com.is.events.model.EventParticipant;
 import com.is.events.model.enums.EventStatus;
 import com.is.places.model.Place;
 import com.is.places.repository.PlaceRepository;
+import com.is.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,8 @@ public class PushNotificationService {
     private FirebaseMessaging firebaseMessaging;
     private final UserFcmTokenRepository userFcmTokenRepository;
     private final PlaceRepository placeRepository;
+    @Autowired
+    private NotificationService notificationService;
     
     @Value("${firebase.service-account.path:firebase-service-account.json}")
     private String serviceAccountPath;
@@ -194,26 +197,22 @@ public class PushNotificationService {
                 event.getSportEvent().getSportId(),
                 event.getOrganizerEvent().getOrganizerId() // Исключаем организатора
             );
-            
             Place place = placeRepository.findPlaceByPlaceId(event.getPlaceId());
             LocalDateTime eventDateTime = event.getDateTime();
             String formattedDate = eventDateTime.format(DATE_FORMATTER);
             String formattedTime = eventDateTime.format(TIME_FORMATTER);
-            
+            String title = "🎯 Новое событие по вашему любимому виду спорта!";
+            String body = String.format("👋 Эй! Кто-то хочет поиграть в %s!\n\n🏟️ Место: %s\n📅 Дата: %s\n⏰ Время: %s\n\nПрисоединяйся к игре! 🎮",
+                event.getSportEvent().getSportName(),
+                place.getName(),
+                formattedDate,
+                formattedTime);
             for (UserFcmToken token : interestedUserTokens) {
                 Message message = Message.builder()
                     .setToken(token.getToken())
                     .setNotification(Notification.builder()
-                        .setTitle("🎯 Новое событие по вашему любимому виду спорта!")
-                        .setBody(String.format("👋 Эй! Кто-то хочет поиграть в %s!\n\n" +
-                            "🏟️ Место: %s\n" +
-                            "📅 Дата: %s\n" +
-                            "⏰ Время: %s\n\n" +
-                            "Присоединяйся к игре! 🎮", 
-                            event.getSportEvent().getSportName(),
-                            place.getName(),
-                            formattedDate,
-                            formattedTime))
+                        .setTitle(title)
+                        .setBody(body)
                         .build())
                     .putData("type", "NEW_EVENT")
                     .putData("eventId", event.getEventId().toString())
@@ -222,12 +221,43 @@ public class PushNotificationService {
                     .putData("deepLink", String.format("placeandplay://event/%d", event.getEventId()))
                     .putData("click_action", "FLUTTER_NOTIFICATION_CLICK")
                     .build();
-
                 String response = firebaseMessaging.send(message);
                 log.info("Successfully sent new event notification: {}", response);
+                // История уведомлений
+                notificationService.createNotification(
+                    token.getUserId(),
+                    "NEW_EVENT",
+                    title,
+                    body,
+                    Map.of(
+                        "eventId", event.getEventId(),
+                        "sportId", event.getSportEvent().getSportId(),
+                        "placeId", event.getPlaceId()
+                    )
+                );
             }
         } catch (Exception e) {
             log.error("Error sending new event notification", e);
+        }
+    }
+
+    public void sendSimpleNotification(Long userId, String title, String body, String type) {
+        try {
+            List<UserFcmToken> tokens = userFcmTokenRepository.findByUserId(userId);
+            for (UserFcmToken token : tokens) {
+                Message message = Message.builder()
+                    .setToken(token.getToken())
+                    .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                    .putData("type", type)
+                    .build();
+                String response = firebaseMessaging.send(message);
+                log.info("Successfully sent simple notification: {}", response);
+            }
+        } catch (Exception e) {
+            log.error("Error sending simple notification", e);
         }
     }
 } 

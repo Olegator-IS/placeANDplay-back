@@ -4,6 +4,7 @@ import com.is.auth.model.user.User;
 import com.is.auth.model.user.UserAdditionalInfo;
 import com.is.auth.repository.UserRepository;
 import com.is.auth.repository.UserAdditionalInfoRepository;
+import com.is.auth.service.PushNotificationService;
 import com.is.friendship.dto.FriendshipListResponse;
 import com.is.friendship.dto.FriendshipRequest;
 import com.is.friendship.dto.FriendshipResponse;
@@ -12,6 +13,7 @@ import com.is.friendship.model.Friendship;
 import com.is.friendship.model.enums.FriendshipStatus;
 import com.is.friendship.repository.FriendshipRepository;
 import com.is.friendship.service.websocket.FriendshipWebSocketService;
+import com.is.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,6 +34,8 @@ public class FriendshipService {
     private final UserRepository userRepository;
     private final UserAdditionalInfoRepository userAdditionalInfoRepository;
     private final FriendshipWebSocketService webSocketService;
+    private final PushNotificationService pushNotificationService;
+    private final NotificationService notificationService;
 
     @Transactional
     public FriendshipResponse sendFriendRequest(Long currentId, Long friendId) {
@@ -73,7 +77,12 @@ public class FriendshipService {
 
         friendship = friendshipRepository.save(friendship);
         webSocketService.sendFriendRequestNotification(friendship);
-
+        // PUSH: уведомление получателю
+        String title = "Заявка в друзья";
+        String body = String.format("🚀 %s %s отправил вам заявку в друзья. Не упустите шанс завести новое знакомство!", currentUser.getFirstName(), currentUser.getLastName());
+        pushNotificationService.sendSimpleNotification(friend.getUserId(), title, body, "FRIEND_REQUEST");
+        // История уведомлений
+        notificationService.createNotification(friend.getUserId(), "FRIEND_REQUEST", title, body, null);
         return convertToResponse(friendship, currentId, FriendshipResponseType.FRIEND);
     }
 
@@ -96,7 +105,13 @@ public class FriendshipService {
         friendship.setStatus(FriendshipStatus.ACCEPTED);
         friendship = friendshipRepository.save(friendship);
         webSocketService.sendFriendRequestAcceptedNotification(friendship);
-
+        // PUSH: уведомление инициатору
+        User initiator = friendship.getInitiator();
+        String title = "Заявка принята";
+        String body = String.format("🥳 Ура! %s %s теперь в вашем списке друзей. Настало время для новых совместных активностей", user.getFirstName(), user.getLastName());
+        pushNotificationService.sendSimpleNotification(initiator.getUserId(), title, body, "FRIEND_REQUEST_ACCEPTED");
+        // История уведомлений
+        notificationService.createNotification(initiator.getUserId(), "FRIEND_REQUEST_ACCEPTED", title, body, null);
         return convertToResponse(friendship, userId, FriendshipResponseType.FRIEND);
     }
 
@@ -290,5 +305,14 @@ public class FriendshipService {
             .createdAt(friendship.getCreatedAt())
             .updatedAt(friendship.getUpdatedAt())
             .build();
+    }
+
+    public boolean isFriend(Long userId, Long otherUserId) {
+        User user = userRepository.findById(userId)
+            .orElse(null);
+        User other = userRepository.findById(otherUserId)
+            .orElse(null);
+        if (user == null || other == null) return false;
+        return friendshipRepository.findByUsersAndStatus(user, other, FriendshipStatus.ACCEPTED).isPresent();
     }
 } 

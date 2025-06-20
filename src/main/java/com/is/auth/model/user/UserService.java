@@ -397,6 +397,9 @@ public class UserService {
             response.setBio(info.getBio());
             response.setGender(info.getGender());
             response.setBirthDate(info.getBirthDate());
+            if (info.getBirthDate() != null) {
+                response.setBirthYear(info.getBirthDate().getYear());
+            }
             response.setCity(info.getCurrentLocationCityId() != null ? info.getCurrentLocationCityId().longValue() : null);
             response.setCountry(info.getCurrentLocationCountryId() != null ? info.getCurrentLocationCountryId().longValue() : null);
             
