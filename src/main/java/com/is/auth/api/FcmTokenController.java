@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -76,6 +77,7 @@ public class FcmTokenController {
         }
     }
 
+    @Transactional
     @DeleteMapping("/unregister")
     @ApiOperation(value = "Unregister an FCM token", notes = "Removes a registered FCM token")
     public ResponseEntity<?> unregisterToken(

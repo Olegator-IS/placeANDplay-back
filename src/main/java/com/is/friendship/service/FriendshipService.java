@@ -293,7 +293,7 @@ public class FriendshipService {
         UserAdditionalInfo info = userAdditionalInfoRepository.findById(friendId)
             .orElse(new UserAdditionalInfo());
         profilePictureUrl = info.getProfilePictureUrl();
-
+            
         return FriendshipResponse.builder()
             .id(friendship.getId())
             .userId(currentUserId)
