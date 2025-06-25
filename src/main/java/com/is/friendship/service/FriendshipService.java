@@ -4,6 +4,7 @@ import com.is.auth.model.user.User;
 import com.is.auth.model.user.UserAdditionalInfo;
 import com.is.auth.repository.UserRepository;
 import com.is.auth.repository.UserAdditionalInfoRepository;
+import com.is.auth.service.PushNotificationService;
 import com.is.friendship.dto.FriendshipListResponse;
 import com.is.friendship.dto.FriendshipRequest;
 import com.is.friendship.dto.FriendshipResponse;
@@ -12,6 +13,7 @@ import com.is.friendship.model.Friendship;
 import com.is.friendship.model.enums.FriendshipStatus;
 import com.is.friendship.repository.FriendshipRepository;
 import com.is.friendship.service.websocket.FriendshipWebSocketService;
+import com.is.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,6 +34,8 @@ public class FriendshipService {
     private final UserRepository userRepository;
     private final UserAdditionalInfoRepository userAdditionalInfoRepository;
     private final FriendshipWebSocketService webSocketService;
+    private final PushNotificationService pushNotificationService;
+    private final NotificationService notificationService;
 
     @Transactional
     public FriendshipResponse sendFriendRequest(Long currentId, Long friendId) {
@@ -73,8 +77,13 @@ public class FriendshipService {
 
         friendship = friendshipRepository.save(friendship);
         webSocketService.sendFriendRequestNotification(friendship);
-
-        return convertToResponse(friendship);
+        // PUSH: уведомление получателю
+        String title = "Заявка в друзья";
+        String body = String.format("🚀 %s %s отправил вам заявку в друзья. Не упустите шанс завести новое знакомство!", currentUser.getFirstName(), currentUser.getLastName());
+        pushNotificationService.sendSimpleNotification(friend.getUserId(), title, body, "FRIEND_REQUEST");
+        // История уведомлений
+        notificationService.createNotification(friend.getUserId(), "FRIEND_REQUEST", title, body, null);
+        return convertToResponse(friendship, currentId, FriendshipResponseType.FRIEND);
     }
 
     @Transactional
@@ -96,8 +105,14 @@ public class FriendshipService {
         friendship.setStatus(FriendshipStatus.ACCEPTED);
         friendship = friendshipRepository.save(friendship);
         webSocketService.sendFriendRequestAcceptedNotification(friendship);
-
-        return convertToResponse(friendship);
+        // PUSH: уведомление инициатору
+        User initiator = friendship.getInitiator();
+        String title = "Заявка принята";
+        String body = String.format("🥳 Ура! %s %s теперь в вашем списке друзей. Настало время для новых совместных активностей", user.getFirstName(), user.getLastName());
+        pushNotificationService.sendSimpleNotification(initiator.getUserId(), title, body, "FRIEND_REQUEST_ACCEPTED");
+        // История уведомлений
+        notificationService.createNotification(initiator.getUserId(), "FRIEND_REQUEST_ACCEPTED", title, body, null);
+        return convertToResponse(friendship, userId, FriendshipResponseType.FRIEND);
     }
 
     @Transactional
@@ -120,7 +135,7 @@ public class FriendshipService {
         friendship = friendshipRepository.save(friendship);
         webSocketService.sendFriendRequestRejectedNotification(friendship);
 
-        return convertToResponse(friendship);
+        return convertToResponse(friendship, userId, FriendshipResponseType.FRIEND);
     }
 
     @Transactional
@@ -146,7 +161,7 @@ public class FriendshipService {
         friendship = friendshipRepository.save(friendship);
         webSocketService.sendUserBlockedNotification(friendship);
 
-        return convertToResponse(friendship);
+        return convertToResponse(friendship, userId, FriendshipResponseType.FRIEND);
     }
 
     @Transactional
@@ -164,7 +179,7 @@ public class FriendshipService {
         friendshipRepository.delete(friendship);
         webSocketService.sendUserUnblockedNotification(friendship);
 
-        return convertToResponse(friendship);
+        return convertToResponse(friendship, userId, FriendshipResponseType.FRIEND);
     }
 
     @Transactional
@@ -182,13 +197,17 @@ public class FriendshipService {
         webSocketService.sendFriendRemovedNotification(friendship);
     }
 
+    public enum FriendshipResponseType {
+        INCOMING, OUTGOING, FRIEND
+    }
+
     public FriendshipListResponse getFriends(Long userId, Pageable pageable) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
 
         Page<Friendship> friendships = friendshipRepository.findByUserAndStatus(user, FriendshipStatus.ACCEPTED, pageable);
         List<FriendshipResponse> responses = friendships.getContent().stream()
-            .map(this::convertToResponse)
+            .map(f -> convertToResponse(f, userId, FriendshipResponseType.FRIEND))
             .collect(Collectors.toList());
 
         return FriendshipListResponse.builder()
@@ -201,10 +220,9 @@ public class FriendshipService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
 
-        // Ищем запросы, где пользователь является получателем (user2)
         Page<Friendship> friendships = friendshipRepository.findIncomingRequests(user, FriendshipStatus.PENDING, pageable);
         List<FriendshipResponse> responses = friendships.getContent().stream()
-            .map(this::convertToResponse)
+            .map(f -> convertToResponse(f, userId, FriendshipResponseType.INCOMING))
             .collect(Collectors.toList());
 
         return FriendshipListResponse.builder()
@@ -217,10 +235,9 @@ public class FriendshipService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new FriendshipException(FriendshipException.ErrorType.USER_NOT_FOUND));
 
-        // Ищем запросы, где пользователь является инициатором
         Page<Friendship> friendships = friendshipRepository.findByInitiatorAndStatus(user, FriendshipStatus.PENDING, pageable);
         List<FriendshipResponse> responses = friendships.getContent().stream()
-            .map(this::convertToResponse)
+            .map(f -> convertToResponse(f, userId, FriendshipResponseType.OUTGOING))
             .collect(Collectors.toList());
 
         return FriendshipListResponse.builder()
@@ -235,7 +252,7 @@ public class FriendshipService {
 
         Page<Friendship> friendships = friendshipRepository.findByUserAndStatus(user, FriendshipStatus.BLOCKED, pageable);
         List<FriendshipResponse> responses = friendships.getContent().stream()
-            .map(this::convertToResponse)
+            .map(f -> convertToResponse(f, userId, FriendshipResponseType.FRIEND))
             .collect(Collectors.toList());
 
         return FriendshipListResponse.builder()
@@ -244,22 +261,80 @@ public class FriendshipService {
             .build();
     }
 
-    private FriendshipResponse convertToResponse(Friendship friendship) {
-        User currentUser = friendship.getUser1();
-        User otherUser = friendship.getUser2();
-        UserAdditionalInfo otherUserInfo = userAdditionalInfoRepository.findById(otherUser.getUserId())
+    private FriendshipResponse convertToResponse(Friendship friendship, Long currentUserId, FriendshipResponseType type) {
+        User targetUser;
+        Long friendId;
+        String firstName;
+        String lastName;
+        String profilePictureUrl;
+
+        switch (type) {
+            case INCOMING:
+                // Показываем отправителя (initiator или user1)
+                targetUser = friendship.getUser1();
+                break;
+            case OUTGOING:
+                // Показываем получателя (user2)
+                targetUser = friendship.getUser2();
+                break;
+            case FRIEND:
+            default:
+                // Для друзей — тот, кто не currentUser
+                if (friendship.getUser1().getUserId().equals(currentUserId)) {
+                    targetUser = friendship.getUser2();
+                } else {
+                    targetUser = friendship.getUser1();
+                }
+                break;
+        }
+        friendId = targetUser.getUserId();
+        firstName = targetUser.getFirstName();
+        lastName = targetUser.getLastName();
+        UserAdditionalInfo info = userAdditionalInfoRepository.findById(friendId)
             .orElse(new UserAdditionalInfo());
+        profilePictureUrl = info.getProfilePictureUrl();
             
         return FriendshipResponse.builder()
             .id(friendship.getId())
-            .userId(currentUser.getUserId())
-            .friendId(otherUser.getUserId())
-            .firstName(otherUser.getFirstName())
-            .lastName(otherUser.getLastName())
-            .profilePictureUrl(otherUserInfo.getProfilePictureUrl())
+            .userId(currentUserId)
+            .friendId(friendId)
+            .firstName(firstName)
+            .lastName(lastName)
+            .profilePictureUrl(profilePictureUrl)
             .status(friendship.getStatus())
             .createdAt(friendship.getCreatedAt())
             .updatedAt(friendship.getUpdatedAt())
             .build();
+    }
+
+    public boolean isFriend(Long userId, Long otherUserId) {
+        User user = userRepository.findById(userId)
+            .orElse(null);
+        User other = userRepository.findById(otherUserId)
+            .orElse(null);
+        if (user == null || other == null) return false;
+        return friendshipRepository.findByUsersAndStatus(user, other, FriendshipStatus.ACCEPTED).isPresent();
+    }
+
+    public String getFriendshipStatus(Long userId, Long otherUserId) {
+        User user = userRepository.findById(userId).orElse(null);
+        User other = userRepository.findById(otherUserId).orElse(null);
+        if (user == null || other == null) return "not_friend";
+
+        // Проверка на блокировку
+        if (friendshipRepository.findByUsersAndStatus(user, other, com.is.friendship.model.enums.FriendshipStatus.BLOCKED).isPresent() ||
+            friendshipRepository.findByUsersAndStatus(other, user, com.is.friendship.model.enums.FriendshipStatus.BLOCKED).isPresent()) {
+            return "blocked";
+        }
+        // Проверка на дружбу
+        if (friendshipRepository.findByUsersAndStatus(user, other, com.is.friendship.model.enums.FriendshipStatus.ACCEPTED).isPresent()) {
+            return "already_friend";
+        }
+        // Проверка на pending (ожидание)
+        if (friendshipRepository.findByUsersAndStatus(user, other, com.is.friendship.model.enums.FriendshipStatus.PENDING).isPresent() ||
+            friendshipRepository.findByUsersAndStatus(other, user, com.is.friendship.model.enums.FriendshipStatus.PENDING).isPresent()) {
+            return "pending_request";
+        }
+        return "not_friend";
     }
 } 

@@ -333,6 +333,34 @@ public class RbsControllerAuth {
         return userService.checkEmailVerificationStatus(email, language);
     }
 
+    @GetMapping("/health/ws")
+    @ApiOperation(value = "Check WebSocket health", notes = "Returns WebSocket health status")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "WebSocket is healthy"),
+        @ApiResponse(code = 503, message = "WebSocket is unhealthy")
+    })
+    public ResponseEntity<Map<String, Object>> wsHealthCheck() {
+        Map<String, Object> healthStatus = new HashMap<>();
+        try {
+            // Здесь можно добавить реальную проверку, если есть (например, ping к брокеру)
+            healthStatus.put("status", "UP");
+            healthStatus.put("timestamp", LocalDateTime.now());
+            healthStatus.put("websocket", "UP");
+            healthStatus.put("service", "ws-service");
+            healthStatus.put("version", "1.0");
+            return ResponseEntity.ok(healthStatus);
+        } catch (Exception e) {
+            log.error("WebSocket health check failed", e);
+            healthStatus.put("status", "DOWN");
+            healthStatus.put("timestamp", LocalDateTime.now());
+            healthStatus.put("websocket", "DOWN");
+            healthStatus.put("service", "ws-service");
+            healthStatus.put("version", "1.0");
+            healthStatus.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(healthStatus);
+        }
+    }
+
     private void validateLanguage(String language) {
         if (!language.equals("ru") && !language.equals("en") && !language.equals("uz")) {
             throw new IllegalArgumentException("Unsupported language. Supported languages are: ru, en, uz");

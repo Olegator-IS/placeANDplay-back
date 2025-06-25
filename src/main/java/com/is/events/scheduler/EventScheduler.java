@@ -41,7 +41,8 @@ public class EventScheduler {
             events.forEach(event -> {
                 try {
                     if (event.getDateTime().isBefore(now)) {
-                        if (event.getStatus() == EventStatus.PENDING_APPROVAL ||
+                        if (event.getStatus() == EventStatus.OPEN ||
+                            event.getStatus() == EventStatus.PENDING_APPROVAL ||
                             event.getStatus() == EventStatus.CHANGES_REQUESTED) {
                             event.forceExpire(); // Новый метод для принудительного перевода в EXPIRED
                             Event savedEvent = eventsRepository.save(event);

@@ -159,7 +159,7 @@ public class EventsService {
         }
 
         // Установка дополнительных полей
-        dto.setJoinable(event.getStatus() == EventStatus.PENDING_APPROVAL || event.getStatus() == EventStatus.CONFIRMED);
+        dto.setJoinable(event.getStatus() == EventStatus.OPEN || event.getStatus() == EventStatus.PENDING_APPROVAL || event.getStatus() == EventStatus.CONFIRMED);
         dto.setMaxParticipants(event.getSportEvent().getMaxParticipants());
         dto.setEventType(event.getSportEvent().getSportType());
         dto.setLocation(event.getSportEvent().getLocation());
@@ -197,7 +197,7 @@ public class EventsService {
         }
 
         event.setFirstTimeEventCreation(isFirstEventCreation);
-        event.setStatus(EventStatus.PENDING_APPROVAL);
+        event.setStatus(EventStatus.OPEN);
         Event savedEvent = eventsRepository.save(event);
 
         // Отправляем системное сообщение о создании ивента
@@ -210,7 +210,8 @@ public class EventsService {
 
         emailService.sendEventCreated(event,lang,getPlace.getAddress(),getPlace.getName());
 
-
+        // Отправляем уведомления пользователям, у которых этот вид спорта в избранном
+        pushNotificationService.sendNewEventNotification(savedEvent);
 
         EventDTO resultDto = convertToDTO(savedEvent);
         resultDto.setFirstEventCreation(isFirstEventCreation);
@@ -605,14 +606,15 @@ public class EventsService {
         LocalDateTime endDateTime = startDate.plusDays(30).atTime(23, 59, 59);
 
         List<Event> events = eventsRepository.findAll(
-            (root, query, cb) -> {
-                return cb.and(
-                    cb.equal(root.get("placeId"), placeId),
-                    cb.equal(root.get("status"), EventStatus.PENDING_APPROVAL),
-                    cb.greaterThanOrEqualTo(root.get("dateTime"), startDateTime),
-                    cb.lessThanOrEqualTo(root.get("dateTime"), endDateTime)
-                );
-            }
+                (root, query, cb) -> cb.and(
+                        cb.equal(root.get("placeId"), placeId),
+                        cb.or(
+                                cb.equal(root.get("status"), EventStatus.PENDING_APPROVAL),
+                                cb.equal(root.get("status"), EventStatus.OPEN)
+                        ),
+                        cb.greaterThanOrEqualTo(root.get("dateTime"), startDateTime),
+                        cb.lessThanOrEqualTo(root.get("dateTime"), endDateTime)
+                )
         );
 
         Map<LocalDate, Long> eventCountByDate = events.stream()
@@ -898,5 +900,18 @@ public class EventsService {
             case REJECTED, CONFIRMED, CHANGES_REQUESTED, IN_PROGRESS, COMPLETED, EXPIRED -> true;
             default -> false;
         };
+    }
+
+    @Transactional
+    public EventDTO moveToPendingApproval(Long eventId, Long userId, String lang) {
+        Event event = findAndValidateEvent(eventId, lang);
+        validateEventOrganizer(event, userId, lang);
+        if (event.getStatus() != EventStatus.OPEN) {
+            throw new EventValidationException("invalid_status_transition", "Можно перевести в ожидание подтверждения только из статуса OPEN");
+        }
+        event.setStatus(EventStatus.PENDING_APPROVAL);
+        Event savedEvent = eventsRepository.save(event);
+        // Можно добавить уведомления/логирование
+        return convertToDTO(savedEvent);
     }
 }

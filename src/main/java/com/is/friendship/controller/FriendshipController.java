@@ -129,4 +129,9 @@ public class FriendshipController {
         Sort sort = Sort.by(Sort.Direction.fromString(direction), sortBy);
         return ResponseEntity.ok(friendshipService.getBlockedUsers(userId, PageRequest.of(page, size, sort)));
     }
+
+    @GetMapping("/is-friend")
+    public String isFriend(@RequestParam Long userId, @RequestParam Long otherUserId) {
+        return friendshipService.getFriendshipStatus(userId, otherUserId);
+    }
 } 

@@ -13,9 +13,25 @@ public interface UserFcmTokenRepository extends JpaRepository<UserFcmToken, Long
     List<UserFcmToken> findByUserId(Long userId);
     
     Optional<UserFcmToken> findByToken(String token);
-    
+
     @Query(value = """
-            SELECT DISTINCT t.* FROM user_fcm_token t 
+    SELECT DISTINCT t.* FROM users.user_fcm_tokens t 
+    INNER JOIN users.user_details ud ON t.user_id = ud.user_id
+    WHERE EXISTS (
+        SELECT 1 
+        FROM jsonb_array_elements(ud.favorite_sports) as sport
+        WHERE CAST(sport->>'sportId' AS BIGINT) = :sportId
+    )
+    AND t.user_id != :excludeUserId
+    """, nativeQuery = true)
+    List<UserFcmToken> findByFavoriteSportId(
+            @Param("sportId") Long sportId,
+            @Param("excludeUserId") Long excludeUserId
+    );
+
+
+    @Query(value = """
+            SELECT DISTINCT t.* FROM users.user_fcm_tokens t 
             WHERE t.user_id IN (
                 SELECT CAST((p->>'participantId') AS bigint) 
                 FROM events.events e,
