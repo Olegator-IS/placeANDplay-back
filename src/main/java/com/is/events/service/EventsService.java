@@ -606,14 +606,15 @@ public class EventsService {
         LocalDateTime endDateTime = startDate.plusDays(30).atTime(23, 59, 59);
 
         List<Event> events = eventsRepository.findAll(
-            (root, query, cb) -> {
-                return cb.and(
-                    cb.equal(root.get("placeId"), placeId),
-                    cb.equal(root.get("status"), EventStatus.PENDING_APPROVAL),
-                    cb.greaterThanOrEqualTo(root.get("dateTime"), startDateTime),
-                    cb.lessThanOrEqualTo(root.get("dateTime"), endDateTime)
-                );
-            }
+                (root, query, cb) -> cb.and(
+                        cb.equal(root.get("placeId"), placeId),
+                        cb.or(
+                                cb.equal(root.get("status"), EventStatus.PENDING_APPROVAL),
+                                cb.equal(root.get("status"), EventStatus.OPEN)
+                        ),
+                        cb.greaterThanOrEqualTo(root.get("dateTime"), startDateTime),
+                        cb.lessThanOrEqualTo(root.get("dateTime"), endDateTime)
+                )
         );
 
         Map<LocalDate, Long> eventCountByDate = events.stream()
