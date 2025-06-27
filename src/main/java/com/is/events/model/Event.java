@@ -73,6 +73,9 @@ public class Event {
     @Column(name = "skill_level", length = 20)
     private String skillLevel;
 
+    @Column(name = "additional_info")
+    private String additionalInfo;
+
     private boolean isFirstTimeEventCreation;
 
     @PrePersist
