@@ -129,9 +129,10 @@ public class Event {
 
     public void startEvent() {
         LocalDateTime now = LocalDateTime.now();
-        if (this.dateTime.isAfter(now)) {
+        // Разрешаем стартовать за 30 минут до начала
+        if (this.dateTime.minusMinutes(30).isAfter(now)) {
             throw new IllegalStateException(String.format(
-                "Cannot start event before its scheduled time. Event time: %s, Current time: %s", 
+                "Cannot start event earlier than 30 minutes before its scheduled time. Event time: %s, Current time: %s",
                 this.dateTime, now));
         }
 

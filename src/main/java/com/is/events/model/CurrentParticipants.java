@@ -29,6 +29,9 @@ public class CurrentParticipants implements Serializable {
         @JsonProperty("joinedAt")
         private LocalDateTime joinedAt;
 
+        @JsonProperty("checkedInAt")
+        private LocalDateTime checkedInAt;
+
         public Participant() {}
 
         public Participant(Long id, String name, String status, LocalDateTime joinedAt) {
@@ -36,6 +39,15 @@ public class CurrentParticipants implements Serializable {
             this.participantName = name;
             this.status = status;
             this.joinedAt = joinedAt;
+            this.checkedInAt = null;
+        }
+
+        public Participant(Long id, String name, String status, LocalDateTime joinedAt, LocalDateTime checkedInAt) {
+            this.participantId = id;
+            this.participantName = name;
+            this.status = status;
+            this.joinedAt = joinedAt;
+            this.checkedInAt = checkedInAt;
         }
     }
 
@@ -45,6 +57,18 @@ public class CurrentParticipants implements Serializable {
         }
         participants.add(new Participant(id, name, "ACTIVE", LocalDateTime.now()));
         size = participants.size();
+    }
+
+    public void checkInParticipant(Long participantId) {
+        if (participants != null) {
+            participants.stream()
+                    .filter(p -> p.getParticipantId().equals(participantId))
+                    .findFirst()
+                    .ifPresent(participant -> {
+                        participant.setStatus("PRESENT");
+                        participant.setCheckedInAt(LocalDateTime.now());
+                    });
+        }
     }
 
     public boolean hasParticipant(Long participantId) {

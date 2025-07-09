@@ -23,46 +23,47 @@ public class EventMessageService {
         DateTimeFormatter.ofPattern("dd MMMM yyyy 'в' HH:mm", new Locale("ru"));
 
     public void sendEventMessage(Event event, EventMessageType messageType, String participantName, String language) {
-        String message = switch (messageType) {
-            case EVENT_CREATED -> String.format(
+        String message;
+        switch (messageType) {
+            case EVENT_CREATED -> message = String.format(
                 "Организатор %s создал ивент на %s. Ожидается подтверждение со стороны %s.",
                 event.getOrganizerEvent().getOrganizerName(),
                 event.getDateTime().format(DATE_FORMATTER),
                 getPlaceName(event.getPlaceId())
             );
-            
             case STATUS_CHANGED -> {
                 if (event.getStatus() == EventStatus.CONFIRMED) {
-                    yield String.format(
+                    message = String.format(
                         "Статус изменен на ПОДТВЕРЖДЁН. Ивент начнется %s. " +
                         "Покинуть событие можно будет не позже чем за 2 часа до начала!",
                         event.getDateTime().format(DATE_FORMATTER)
                     );
                 } else {
-                    yield String.format(
+                    message = String.format(
                         "Статус ивента изменен на %s",
                         event.getStatus().name()
                     );
                 }
             }
-
-            case EVENT_EXPIRED -> String.format(
+            case EVENT_EXPIRED -> message = String.format(
                     "Событие было переведено в просроченные,т.к организатор не ответил на это событие.",
                     participantName
             );
-            
-            case PARTICIPANT_JOINED -> String.format(
+            case PARTICIPANT_JOINED -> message = String.format(
                 "%s присоединился к ивенту.",
                 participantName
             );
-            
-            case PARTICIPANT_LEFT -> String.format(
+            case PARTICIPANT_LEFT -> message = String.format(
                 "%s покинул ивент.",
                 participantName
             );
-            
-            case EVENT_STARTED -> "🎉 Ивент начался! Желаем всем участникам отличной игры и спортивного настроения! 🏆";
-        };
+            case EVENT_STARTED -> message = "🎉 Ивент начался! Желаем всем участникам отличной игры и спортивного настроения! 🏆";
+            case PARTICIPANT_CHECKED_IN -> message = String.format(
+                "%s отметил своё присутствие на ивенте!",
+                participantName
+            );
+            default -> message = "Системное сообщение";
+        }
 
         Long systemId = 0L;
         String accessTokenSystem = "SYSTEM";

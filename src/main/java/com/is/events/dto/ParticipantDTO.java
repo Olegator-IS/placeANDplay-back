@@ -20,12 +20,12 @@ public class ParticipantDTO {
     }
 
     // Конструктор для создания с профилем
-    public ParticipantDTO(Long participantId, String participantName, LocalDateTime joinedAt, String profilePictureUrl) {
+    public ParticipantDTO(Long participantId, String participantName, LocalDateTime joinedAt, String profilePictureUrl,String status) {
         this.participantId = participantId;
         this.participantName = participantName;
         this.joinedAt = joinedAt;
         this.profilePictureUrl = profilePictureUrl;
-        this.status = "ACTIVE";
+        this.status = status;
     }
 
     // Пустой конструктор для Jackson

@@ -276,6 +276,27 @@ public class EventsController {
         return ResponseEntity.ok(nearestEvent);
     }
 
+    @GetMapping("/checkin")
+    @Operation(summary = "Get user events for check-in at specific place")
+    public ResponseEntity<List<CheckInEventDTO>> getUserEventsForCheckIn(
+            @RequestParam Long placeId,
+            @RequestParam Long userId) {
+        log.info("GET /checkin request received for place {} and user {}", placeId, userId);
+        List<CheckInEventDTO> events = eventsService.getUserEventsForCheckIn(placeId, userId);
+        return ResponseEntity.ok(events);
+    }
+
+    @PostMapping("/{eventId}/checkin")
+    @Operation(summary = "Check-in participant for event")
+    public ResponseEntity<Void> checkInParticipant(
+            @PathVariable Long eventId,
+            @RequestParam Long userId,
+            @RequestHeader(defaultValue = "ru") String language) {
+        log.info("POST /{}/checkin request received for user {}", eventId, userId);
+        eventsService.checkInParticipant(eventId, userId, language);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/check-join-availability")
     @Operation(summary = "Check if user can join an event on a specific date")
     public ResponseEntity<EventJoinAvailabilityResponse> checkEventJoinAvailability(
