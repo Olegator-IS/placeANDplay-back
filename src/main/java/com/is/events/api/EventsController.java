@@ -265,6 +265,17 @@ public class EventsController {
         return ResponseEntity.ok(eventsService.getUserEventStatistics(userId));
     }
 
+    @GetMapping("/nearest-event")
+    @Operation(summary = "Get nearest upcoming event for user")
+    public ResponseEntity<NearestEventDTO> getNearestEventForUser(@RequestParam Long userId) {
+        log.info("GET /nearest-event request received for user {}", userId);
+        NearestEventDTO nearestEvent = eventsService.getNearestEventForUser(userId);
+        if (nearestEvent == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(nearestEvent);
+    }
+
     @GetMapping("/check-join-availability")
     @Operation(summary = "Check if user can join an event on a specific date")
     public ResponseEntity<EventJoinAvailabilityResponse> checkEventJoinAvailability(

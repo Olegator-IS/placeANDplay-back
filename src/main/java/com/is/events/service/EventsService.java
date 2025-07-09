@@ -45,6 +45,7 @@ import com.is.events.service.EventMessageService;
 import com.is.events.dto.UserEventStatisticsDTO;
 import com.is.events.dto.EventJoinAvailabilityResponse;
 import com.is.events.model.EventParticipant;
+import com.is.events.dto.NearestEventDTO;
 
 @Slf4j
 @Service
@@ -917,12 +918,80 @@ public class EventsService {
     public EventDTO moveToPendingApproval(Long eventId, Long userId, String lang) {
         Event event = findAndValidateEvent(eventId, lang);
         validateEventOrganizer(event, userId, lang);
-        if (event.getStatus() != EventStatus.OPEN) {
-            throw new EventValidationException("invalid_status_transition", "Можно перевести в ожидание подтверждения только из статуса OPEN");
+        
+        if (!event.getStatus().equals(EventStatus.OPEN)) {
+            throw new EventValidationException("invalid_status",
+                    returnTextToUserByLang(lang, "invalid_status"));
         }
+        
         event.setStatus(EventStatus.PENDING_APPROVAL);
-        Event savedEvent = eventsRepository.save(event);
-        // Можно добавить уведомления/логирование
-        return convertToDTO(savedEvent);
+        return convertToDTO(eventsRepository.save(event));
+    }
+
+    public NearestEventDTO getNearestEventForUser(Long userId) {
+        log.info("Getting nearest event for user {}", userId);
+        
+        LocalDateTime currentTime = LocalDateTime.now();
+        Event nearestEvent = eventsRepository.findNearestUpcomingEventByUser(userId, currentTime);
+        
+        if (nearestEvent == null) {
+            log.info("No upcoming events found for user {}", userId);
+            return null;
+        }
+        
+        // Вычисляем время до события
+        Duration timeUntilEvent = Duration.between(currentTime, nearestEvent.getDateTime());
+        long totalMinutes = timeUntilEvent.toMinutes();
+        
+        // Форматируем время до события
+        String timeUntilEventFormatted = formatTimeUntilEvent(timeUntilEvent);
+        String timeFormat = getTimeFormat(totalMinutes);
+        
+        // Конвертируем в DTO
+        EventDTO eventDTO = convertToDTO(nearestEvent);
+        
+        return NearestEventDTO.builder()
+                .eventId(eventDTO.getEventId())
+                .title(eventDTO.getTitle())
+                .description(eventDTO.getDescription())
+                .dateTime(eventDTO.getDateTime())
+                .status(eventDTO.getStatus())
+                .placeId(eventDTO.getPlaceId())
+                .organizer(eventDTO.getOrganizer())
+                .participantsCount(eventDTO.getParticipantsCount())
+                .maxParticipants(eventDTO.getMaxParticipants())
+                .eventType(eventDTO.getEventType())
+                .location(eventDTO.getLocation())
+                .price(eventDTO.getPrice())
+                .additionalInfo(eventDTO.getAdditionalInfo())
+                .timeUntilEvent(timeUntilEventFormatted)
+                .totalMinutesUntilEvent(totalMinutes)
+                .isUpcoming(true)
+                .timeFormat(timeFormat)
+                .build();
+    }
+    
+    private String formatTimeUntilEvent(Duration duration) {
+        long days = duration.toDays();
+        long hours = duration.toHours() % 24;
+        long minutes = duration.toMinutes() % 60;
+        
+        if (days > 0) {
+            return String.format("%d дн. %d ч. %d мин.", days, hours, minutes);
+        } else if (hours > 0) {
+            return String.format("%d ч. %d мин.", hours, minutes);
+        } else {
+            return String.format("%d мин.", minutes);
+        }
+    }
+    
+    private String getTimeFormat(long totalMinutes) {
+        if (totalMinutes >= 1440) { // 24 часа
+            return "DAYS";
+        } else if (totalMinutes >= 60) { // 1 час
+            return "HOURS";
+        } else {
+            return "MINUTES";
+        }
     }
 }
