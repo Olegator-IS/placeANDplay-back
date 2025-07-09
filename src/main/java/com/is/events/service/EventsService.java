@@ -98,7 +98,7 @@ public class EventsService {
     public EventDTO convertToDTO(Event event) {
         EventDTO dto = new EventDTO();
         dto.setEventId(event.getEventId());
-        dto.setTitle(event.getSportEvent().getSportName());
+        dto.setTitle(event.getTitle());
         dto.setDescription(event.getDescription());
         dto.setDateTime(event.getDateTime());
         dto.setStatus(event.getStatus().name());

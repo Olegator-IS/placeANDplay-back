@@ -258,6 +258,12 @@ public class RbsControllerAuth {
         return emailService.sendVerificationEmail(email,language);
     }
 
+
+    @PostMapping("/send-MVP-message")
+    public ResponseEntity<?> sendMessageToMyMail(@RequestParam String email,@RequestBody String message) throws MessagingException {
+        return emailService.sendMessageToMyMail(email,message);
+    }
+
     @GetMapping("/verifyCode")
     public ResponseEntity<?> verifyCode(@RequestParam String email,
                                         @RequestParam int code,

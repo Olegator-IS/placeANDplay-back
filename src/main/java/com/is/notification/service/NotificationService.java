@@ -44,6 +44,11 @@ public class NotificationService {
         });
     }
 
+    @Transactional
+    public void markAsReadAll(Long userId){
+        notificationRepository.markAllAsReadByUserId(userId);
+    }
+
     private NotificationDTO toDTO(Notification n) {
         return NotificationDTO.builder()
                 .id(n.getId())

@@ -22,4 +22,9 @@ public class NotificationController {
     public void markAsRead(@PathVariable Long notificationId) {
         notificationService.markAsRead(notificationId);
     }
+
+    @GetMapping("/readAll")
+    public void markAsReadAll(@RequestParam Long userId) {
+        notificationService.markAsReadAll(userId);
+    }
 } 
