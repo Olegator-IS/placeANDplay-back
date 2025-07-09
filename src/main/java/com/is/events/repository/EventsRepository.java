@@ -176,6 +176,23 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
         Pageable pageable
     );
 
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE e.date_time > :currentTime
+            AND e.status IN ('OPEN', 'CONFIRMED', 'PENDING_APPROVAL')
+            AND (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            ORDER BY e.date_time ASC 
+            LIMIT 1
+            """, nativeQuery = true)
+    Event findNearestUpcomingEventByUser(@Param("userId") Long userId, @Param("currentTime") LocalDateTime currentTime);
+
 //    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
     
 //    List<Event> findByStatusAndEndDateTimeBefore(String status, LocalDateTime dateTime);
