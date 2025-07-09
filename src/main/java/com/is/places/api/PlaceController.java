@@ -31,6 +31,18 @@ public class PlaceController {
         log.info("PlaceController initialized!");
     }
 
+
+    @GetMapping("/allByCityForWeb")
+    public ResponseEntity<List<Place>> getAllPlacesForWeb(
+            @RequestParam int currentCity) {
+
+        List<Place> places;
+        places = placeService.getAllPlaces(currentCity);
+
+
+        return places.isEmpty() ? ResponseEntity.noContent().build() : ResponseEntity.ok(places);
+    }
+
     @GetMapping("/allByCity")
     public ResponseEntity<List<Place>> getAllPlaces(
             @RequestParam int currentCity,

@@ -94,6 +94,124 @@ public class EmailService {
     }
 
 
+    public ResponseEntity<?> sendMessageToMyMail(String email, String messageFromMvp) {
+        try {
+            // Создаем структурированное сообщение для бизнеса
+            String structuredMessage = String.format("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                        .header { background: linear-gradient(135deg, #4CAF50 0%%, #45a049 100%%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 30px; }
+                        .user-info { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                        .message-content { background: #f5f5f5; padding: 20px; border-left: 4px solid #4CAF50; border-radius: 4px; }
+                        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 14px; }
+                        .timestamp { color: #888; font-size: 12px; margin-top: 10px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2>📧 Новое сообщение от пользователя</h2>
+                        </div>
+                        <div class="user-info">
+                            <h3>👤 Информация об отправителе:</h3>
+                            <p><strong>Email:</strong> %s</p>
+                            <p><strong>Время отправки:</strong> %s</p>
+                        </div>
+                        <div class="message-content">
+                            <h3>💬 Сообщение:</h3>
+                            <p>%s</p>
+                        </div>
+                        <div class="footer">
+                            <p>Это автоматическое уведомление от Place&Play.</p>
+                            <p>Для ответа используйте кнопку "Ответить" в вашем почтовом клиенте.</p>
+                        </div>
+                        
+                        <div class="timestamp">
+                            Сообщение получено: %s
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """, 
+                email, 
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")),
+                messageFromMvp.replace("\n", "<br>"),
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))
+            );
+
+            // Отправляем письмо на бизнес-почту
+            MimeMessage businessMessage = mailSender.createMimeMessage();
+            MimeMessageHelper businessHelper = new MimeMessageHelper(businessMessage, true, "UTF-8");
+            businessHelper.setFrom("info@placeandplay.uz");
+            businessHelper.setTo("business@placeandplay.uz");
+            businessHelper.setReplyTo(email); // Для ответа на email пользователя
+            businessHelper.setSubject("📧 Новое сообщение от пользователя Place&Play");
+            businessHelper.setText(structuredMessage, true);
+            mailSender.send(businessMessage);
+
+            // Отправляем подтверждение пользователю
+            String userConfirmation = String.format("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                        .header { background: linear-gradient(135deg, #4CAF50 0%%, #45a049 100%%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 30px; }
+                        .message { background: #f0f9f4; padding: 20px; border-radius: 8px; border-left: 4px solid #4CAF50; }
+                        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 14px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2>✅ Сообщение отправлено</h2>
+                        </div>
+                        <div class="message">
+                            <h3>Спасибо за ваше сообщение!</h3>
+                            <p>Мы получили ваше сообщение и ответим вам в ближайшее время.</p>
+                            <p><strong>Время отправки:</strong> %s</p>
+                        </div>
+                        <div class="footer">
+                            <p>Это автоматическое подтверждение от Place&Play.</p>
+                            <p>С уважением, команда Place&Play</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """, 
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))
+            );
+
+            MimeMessage userMessage = mailSender.createMimeMessage();
+            MimeMessageHelper userHelper = new MimeMessageHelper(userMessage, true, "UTF-8");
+            userHelper.setFrom("business@placeandplay.uz");
+            userHelper.setTo(email);
+            userHelper.setSubject("✅ Ваше сообщение отправлено - Place&Play");
+            userHelper.setText(userConfirmation, true);
+            mailSender.send(userMessage);
+
+            log.info("Message from user {} sent successfully to business email", email);
+            return ResponseEntity.ok().build();
+
+        } catch (MessagingException e) {
+            log.error("Ошибка при отправке письма на email: {}", email, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Ошибка при отправке письма.");
+        } catch (Exception e) {
+            log.error("Неизвестная ошибка при отправке email: {}", email, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Произошла непредвиденная ошибка.");
+        }
+    }
+
+
 
     public ResponseEntity<?> verifyCode(String email, int code,String lang) {
         Optional<EmailVerificationCode> optionalCode = verificationCodeRepository.findByEmailAndCodeAndIsVerifiedFalse(email, code);

@@ -70,8 +70,14 @@ public class Event {
     @Column(name = "description", columnDefinition = "text")
     private String description;
 
+    @Column(name = "title", columnDefinition = "text")
+    private String title;
+
     @Column(name = "skill_level", length = 20)
     private String skillLevel;
+
+    @Column(name = "additional_info")
+    private String additionalInfo;
 
     private boolean isFirstTimeEventCreation;
 

@@ -98,11 +98,12 @@ public class EventsService {
     public EventDTO convertToDTO(Event event) {
         EventDTO dto = new EventDTO();
         dto.setEventId(event.getEventId());
-        dto.setTitle(event.getSportEvent().getSportName());
+        dto.setTitle(event.getTitle());
         dto.setDescription(event.getDescription());
         dto.setDateTime(event.getDateTime());
         dto.setStatus(event.getStatus().name());
         dto.setPlaceId(event.getPlaceId());
+        dto.setAdditionalInfo(event.getAdditionalInfo());
 
         // Проверяем, есть ли запись об активности пользователя
         if (event.getOrganizerEvent() != null) {
@@ -134,7 +135,7 @@ public class EventsService {
         }
 
         // Конвертация участников
-        if (event.getCurrentParticipants() != null) {
+        if (event.getCurrentParticipants() != null && event.getCurrentParticipants().getParticipants() != null && !event.getCurrentParticipants().getParticipants().isEmpty()) {
             List<ParticipantDTO> participantDTOs = event.getCurrentParticipants().getParticipants().stream()
                     .map(participant -> {
                         String profilePictureUrl = null;
@@ -177,6 +178,16 @@ public class EventsService {
     public EventDTO addEvent(Event event, String lang) {
         validateEventDate(event.getDateTime(), lang);
         log.info("Creating new event: {}", event);
+
+        // Копируем additionalInfo из sportEvent, если оно есть
+        if (event.getSportEvent() != null && event.getSportEvent().getAdditionalInfo() != null) {
+            event.setAdditionalInfo(event.getSportEvent().getAdditionalInfo());
+        }
+
+        // Явно выставляем size для currentParticipants, если participants не пустой
+        if (event.getCurrentParticipants() != null && event.getCurrentParticipants().getParticipants() != null) {
+            event.getCurrentParticipants().setSize(event.getCurrentParticipants().getParticipants().size());
+        }
 
         Long organizerId = event.getOrganizerEvent().getOrganizerId();
         if (!userRepository.existsById(organizerId)) {
