@@ -40,27 +40,28 @@ public class EventScheduler {
             
             events.forEach(event -> {
                 try {
-                    if (event.getDateTime().isBefore(now)) {
-                        if (event.getStatus() == EventStatus.OPEN ||
-                            event.getStatus() == EventStatus.PENDING_APPROVAL ||
-                            event.getStatus() == EventStatus.CHANGES_REQUESTED) {
-                            event.forceExpire(); // Новый метод для принудительного перевода в EXPIRED
-                            Event savedEvent = eventsRepository.save(event);
-                            
-                            // Отправляем системное сообщение о просрочке события
-                            eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_EXPIRED, null, "ru");
-                            
-                            // Отправляем уведомление через WebSocket
-                            webSocketService.notifyEventUpdate(event.getPlaceId());
-                            webSocketService.sendEventUpdate(savedEvent);
-
-                            Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
-
-
-                            emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
-                            
-                            log.info("Event {} expired due to time", event.getEventId());
-                        }
+                    // Перевод в IN_PROGRESS только если статус CONFIRMED и время наступило
+                    if (event.getStatus() == EventStatus.CONFIRMED && !event.getDateTime().isAfter(now)) {
+                        event.setStatus(EventStatus.IN_PROGRESS);
+                        Event savedEvent = eventsRepository.save(event);
+                        eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_STARTED, null, "ru");
+                        webSocketService.notifyEventUpdate(event.getPlaceId());
+                        webSocketService.sendEventUpdate(savedEvent);
+                        log.info("Event {} moved to IN_PROGRESS", event.getEventId());
+                    }
+                    // Перевод в EXPIRED только если статус OPEN, PENDING_APPROVAL, CHANGES_REQUESTED и время прошло
+                    if ((event.getStatus() == EventStatus.OPEN ||
+                         event.getStatus() == EventStatus.PENDING_APPROVAL ||
+                         event.getStatus() == EventStatus.CHANGES_REQUESTED)
+                        && event.getDateTime().isBefore(now)) {
+                        event.forceExpire();
+                        Event savedEvent = eventsRepository.save(event);
+                        eventMessageService.sendEventMessage(savedEvent, EventMessageType.EVENT_EXPIRED, null, "ru");
+                        webSocketService.notifyEventUpdate(event.getPlaceId());
+                        webSocketService.sendEventUpdate(savedEvent);
+                        Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+                        emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
+                        log.info("Event {} expired due to time", event.getEventId());
                     }
                 } catch (Exception e) {
                     log.error("Error checking event {}: {}", event.getEventId(), e.getMessage());

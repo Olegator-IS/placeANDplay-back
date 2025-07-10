@@ -841,7 +841,7 @@ public class EventsService {
         confirmedEvents.forEach(event -> {
             try {
                 // Дополнительная проверка времени для большей точности
-                if (!event.getDateTime().isAfter(now)) {
+                if (event.getDateTime().isAfter(now)) {
                     event.startEvent();
                     eventsRepository.save(event);
                     Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
@@ -1013,13 +1013,17 @@ public class EventsService {
 
     public List<CheckInEventDTO> getUserEventsForCheckIn(Long placeId, Long userId) {
         log.info("Getting user events for check-in at place {} for user {}", placeId, userId);
-        
-        LocalDate currentDate = LocalDate.now();
-        List<Event> events = eventsRepository.findUserEventsByPlaceAndDate(placeId, userId, currentDate);
-        
+        LocalDate today = LocalDate.now();
+        LocalDateTime nowPlus30 = LocalDateTime.now().plusMinutes(30);
+        List<Event> events = eventsRepository.findEventsForCheckInTodaySimple(placeId, today, nowPlus30);
         return events.stream()
-                .map(event -> convertToCheckInDTO(event, userId))
-                .toList();
+            .filter(event -> {
+                boolean isOrganizer = event.getOrganizerEvent() != null && event.getOrganizerEvent().getOrganizerId().equals(userId);
+                boolean isParticipant = event.getCurrentParticipants() != null && event.getCurrentParticipants().hasParticipant(userId);
+                return isOrganizer || isParticipant;
+            })
+            .map(event -> convertToCheckInDTO(event, userId))
+            .toList();
     }
 
     @Transactional

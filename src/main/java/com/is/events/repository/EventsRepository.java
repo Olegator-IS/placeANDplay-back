@@ -210,6 +210,78 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
             """, nativeQuery = true)
     List<Event> findUserEventsByPlaceAndDate(@Param("placeId") Long placeId, @Param("userId") Long userId, @Param("currentDate") LocalDate currentDate);
 
+    @Query(value = """
+        SELECT e.* FROM events.events e
+        WHERE e.place_id = :placeId
+          AND e.status NOT IN ('EXPIRED', 'COMPLETED', 'CANCELLED')
+          AND (
+            CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+            OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(e.current_participants->'participants') as p
+              WHERE CAST((p->>'participantId') AS bigint) = :userId
+            )
+          )
+          AND (
+            (e.date_time >= :now AND e.date_time <= :now_plus_30)
+            OR (e.date_time < :now)
+          )
+        ORDER BY e.date_time DESC
+        """, nativeQuery = true)
+    List<Event> findEventsForCheckIn(
+        @Param("placeId") Long placeId,
+        @Param("userId") Long userId,
+        @Param("now") java.time.LocalDateTime now,
+        @Param("now_plus_30") java.time.LocalDateTime nowPlus30
+    );
+
+    @Query(value = """
+        SELECT e.* FROM events.events e
+        WHERE e.place_id = :placeId
+          AND DATE(e.date_time) = :today
+          AND (
+            CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+            OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(e.current_participants->'participants') as p
+              WHERE CAST((p->>'participantId') AS bigint) = :userId
+            )
+          )
+          AND (
+            (
+              e.status NOT IN ('EXPIRED', 'COMPLETED', 'CANCELLED')
+              AND e.date_time >= :now
+              AND e.date_time <= :now_plus_30
+            )
+            OR (
+              e.status = 'IN_PROGRESS'
+              AND e.date_time < :now
+            )
+          )
+        ORDER BY e.date_time DESC
+        """, nativeQuery = true)
+    List<Event> findEventsForCheckInToday(
+        @Param("placeId") Long placeId,
+        @Param("userId") Long userId,
+        @Param("today") java.time.LocalDate today,
+        @Param("now") java.time.LocalDateTime now,
+        @Param("now_plus_30") java.time.LocalDateTime nowPlus30
+    );
+
+    @Query(value = """
+        SELECT e.* FROM events.events e
+        WHERE e.place_id = :placeId
+          AND DATE(e.date_time) = :today
+          AND e.status NOT IN ('EXPIRED', 'COMPLETED', 'CANCELLED')
+          AND e.date_time <= :now_plus_30
+        ORDER BY e.date_time DESC
+        """, nativeQuery = true)
+    List<Event> findEventsForCheckInTodaySimple(
+        @Param("placeId") Long placeId,
+        @Param("today") java.time.LocalDate today,
+        @Param("now_plus_30") java.time.LocalDateTime nowPlus30
+    );
+
 //    List<Event> findByStatusAndStartDateTimeBefore(String status, LocalDateTime dateTime);
     
 //    List<Event> findByStatusAndEndDateTimeBefore(String status, LocalDateTime dateTime);
