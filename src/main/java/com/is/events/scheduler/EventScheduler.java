@@ -130,21 +130,13 @@ public class EventScheduler {
 
             // Уведомление организатору
             if (event.getOrganizerEvent() != null) {
-                sendPersonalizedHourBeforeNotification(
-                    event.getOrganizerEvent().getOrganizerId(),
-                    eventName,
-                    "ru" // По умолчанию русский, можно добавить получение языка из профиля
-                );
+                sendPersonalizedHourBeforeNotification(event, event.getOrganizerEvent().getOrganizerId(), "ru");
             }
 
             // Уведомления участникам
             if (event.getCurrentParticipants() != null && event.getCurrentParticipants().getParticipants() != null) {
                 event.getCurrentParticipants().getParticipants().forEach(participant -> {
-                    sendPersonalizedHourBeforeNotification(
-                        participant.getParticipantId(),
-                        eventName,
-                        "ru" // По умолчанию русский, можно добавить получение языка из профиля
-                    );
+                    sendPersonalizedHourBeforeNotification(event, participant.getParticipantId(), "ru");
                 });
             }
         } catch (Exception e) {
@@ -152,22 +144,30 @@ public class EventScheduler {
         }
     }
 
-    private void sendPersonalizedHourBeforeNotification(Long userId, String eventName, String defaultLanguage) {
+    private void sendPersonalizedHourBeforeNotification(Event event, Long userId, String defaultLanguage) {
         try {
-            // Получаем язык пользователя из профиля
             String userLanguage = getUserLanguage(userId, defaultLanguage);
             log.debug("User {} language: {}", userId, userLanguage);
-            
+
+            String eventName = event.getSportEvent() != null ? event.getSportEvent().getSportName() : "Событие";
+            Place place = placeRepository.findPlaceByPlaceId(event.getPlaceId());
+            String placeName = place != null ? place.getName() : "место";
+            String date = event.getDateTime().toLocalDate().toString();
+            String time = event.getDateTime().toLocalTime().toString();
+
             String title = localizationService.getMessage("hour_before.title", userLanguage);
-            String message = localizationService.getMessage("hour_before.message", userLanguage)
-                    .replace("{0}", eventName);
+            String messageTemplate = localizationService.getMessage("hour_before.message", userLanguage);
+            String message = messageTemplate
+                .replace("{0}", eventName)
+                .replace("{1}", placeName)
+                .replace("{2}", date)
+                .replace("{3}", time);
             String notificationType = localizationService.getMessage("hour_before.notification_type", userLanguage);
 
             log.debug("Notification for user {}: title='{}', message='{}', type='{}'", 
                      userId, title, message, notificationType);
 
             pushNotificationService.sendSimpleNotification(userId, title, message, notificationType);
-            
             log.debug("Sent hour-before notification to user {} for event: {} in language: {}", 
                      userId, eventName, userLanguage);
         } catch (Exception e) {
