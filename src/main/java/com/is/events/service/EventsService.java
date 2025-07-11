@@ -31,10 +31,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Duration;
-import java.util.List;
-import java.util.Objects;
-import java.util.ArrayList;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.is.events.dto.EventAvailabilityDTO;
@@ -1032,17 +1029,24 @@ public class EventsService {
         Event event = findAndValidateEvent(eventId, lang);
 
         // Проверка статуса ивента
-        if (event.getStatus() != EventStatus.CONFIRMED) {
+        Set<EventStatus> allowedStatuses = EnumSet.of(EventStatus.CONFIRMED, EventStatus.IN_PROGRESS);
+        if (!allowedStatuses.contains(event.getStatus())) {
             throw new EventValidationException("checkin_not_confirmed",
                     returnTextToUserByLang(lang, "checkin_not_confirmed"));
         }
 
-        // Проверка времени до начала ивента (разрешено за 30 минут до старта)
+        // Проверка времени до начала ивента (разрешено за 30 минут до старта) и присоединение к ивенту,которое закончено нельзя
         LocalDateTime now = LocalDateTime.now();
-        Duration beforeStart = Duration.between(now, event.getDateTime());
-        if (beforeStart.toMinutes() > 30 || beforeStart.toMinutes() < 0) {
+        long minutesBefore = Duration.between(now, event.getDateTime()).toMinutes();
+
+        if (minutesBefore > 30) {
             throw new EventValidationException("checkin_time_window",
                     returnTextToUserByLang(lang, "checkin_time_window"));
+        }
+
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new EventValidationException("checkin_not_allowed",
+                    returnTextToUserByLang(lang, "checkin_not_allowed"));
         }
 
         boolean isOrganizer = event.getOrganizerEvent() != null && event.getOrganizerEvent().getOrganizerId().equals(userId);
