@@ -48,6 +48,64 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
     List<Event> findLastThreeCompletedEventsByUser(Long userId);
 
     @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE e.status = 'CONFIRMED' 
+            AND e.date_time BETWEEN :startTime AND :endTime
+            ORDER BY e.date_time ASC
+            """, nativeQuery = true)
+    List<Event> findConfirmedEventsStartingInHour(@Param("startTime") LocalDateTime startTime, 
+                                                  @Param("endTime") LocalDateTime endTime);
+
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE e.status = 'IN_PROGRESS' 
+            AND (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            ORDER BY e.date_time ASC 
+            LIMIT 1
+            """, nativeQuery = true)
+    Event findCurrentInProgressEventForUser(@Param("userId") Long userId);
+
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE DATE(e.date_time) = :today
+            AND (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            AND e.status NOT IN ('EXPIRED', 'CANCELLED')
+            ORDER BY e.date_time ASC
+            """, nativeQuery = true)
+    List<Event> findEventsForTodayByUser(@Param("userId") Long userId, @Param("today") LocalDate today);
+
+    @Query(value = """
+            SELECT e.* FROM events.events e 
+            WHERE e.date_time > :currentTime
+            AND (
+                CAST((e.organizer_event->>'organizerId') AS bigint) = :userId
+                OR EXISTS (
+                    SELECT 1 
+                    FROM jsonb_array_elements(e.current_participants->'participants') as p 
+                    WHERE CAST((p->>'participantId') AS bigint) = :userId
+                )
+            )
+            AND e.status IN ('CONFIRMED', 'IN_PROGRESS')
+            ORDER BY e.date_time ASC 
+            LIMIT 1
+            """, nativeQuery = true)
+    Event findNearestEventForUser(@Param("userId") Long userId, @Param("currentTime") LocalDateTime currentTime);
+
+    @Query(value = """
             SELECT DISTINCT e.* FROM events.events e 
             WHERE e.status NOT IN ('EXPIRED', 'REJECTED')
             AND (

@@ -61,6 +61,9 @@ public class UserAdditionalInfo {
     @Column(name = "open_to_new_connections")
     private Boolean openToNewConnections = true;
 
+    @Column(name = "language", length = 5)
+    private String language = "ru"; // По умолчанию русский
+
     @Column(name = "date_registered")
     private LocalDateTime dateRegistered;
 

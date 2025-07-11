@@ -276,6 +276,25 @@ public class EventsController {
         return ResponseEntity.ok(nearestEvent);
     }
 
+    @GetMapping("/current-in-progress")
+    @Operation(summary = "Get current IN_PROGRESS event for user")
+    public ResponseEntity<EventDTO> getCurrentInProgressEvent(@RequestParam Long userId) {
+        log.info("GET /current-in-progress request received for user {}", userId);
+        EventDTO currentEvent = eventsService.getCurrentInProgressEventForUser(userId);
+        if (currentEvent == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(currentEvent);
+    }
+
+    @GetMapping("/events-for-today")
+    @Operation(summary = "Get all events for today for user")
+    public ResponseEntity<List<EventDTO>> getEventsForToday(@RequestParam Long userId) {
+        log.info("GET /events-for-today request received for user {}", userId);
+        List<EventDTO> todayEvents = eventsService.getEventsForToday(userId);
+        return ResponseEntity.ok(todayEvents);
+    }
+
     @GetMapping("/checkin")
     @Operation(summary = "Get user events for check-in at specific place")
     public ResponseEntity<List<CheckInEventDTO>> getUserEventsForCheckIn(

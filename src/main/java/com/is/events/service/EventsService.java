@@ -944,16 +944,63 @@ public class EventsService {
     public NearestEventDTO getNearestEventForUser(Long userId) {
         log.info("Getting nearest event for user {}", userId);
         
-        LocalDateTime currentTime = LocalDateTime.now();
-        Event nearestEvent = eventsRepository.findNearestUpcomingEventByUser(userId, currentTime);
-        
-        if (nearestEvent == null) {
-            log.info("No upcoming events found for user {}", userId);
-            return null;
+        try {
+            LocalDateTime currentTime = LocalDateTime.now();
+            Event nearestEvent = eventsRepository.findNearestEventForUser(userId, currentTime);
+            
+            if (nearestEvent == null) {
+                log.info("No nearest event found for user {}", userId);
+                return null;
+            }
+            
+            return convertToNearestEventDTO(nearestEvent, userId);
+        } catch (Exception e) {
+            log.error("Error getting nearest event for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Error getting nearest event", e);
         }
+    }
+
+    public EventDTO getCurrentInProgressEventForUser(Long userId) {
+        log.info("Getting current IN_PROGRESS event for user {}", userId);
+        
+        try {
+            Event currentEvent = eventsRepository.findCurrentInProgressEventForUser(userId);
+            
+            if (currentEvent == null) {
+                log.info("No current IN_PROGRESS event found for user {}", userId);
+                return null;
+            }
+            
+            return convertToDTO(currentEvent);
+        } catch (Exception e) {
+            log.error("Error getting current IN_PROGRESS event for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Error getting current IN_PROGRESS event", e);
+        }
+    }
+
+    public List<EventDTO> getEventsForToday(Long userId) {
+        log.info("Getting events for today for user {}", userId);
+        
+        try {
+            LocalDate today = LocalDate.now();
+            List<Event> todayEvents = eventsRepository.findEventsForTodayByUser(userId, today);
+            
+            log.info("Found {} events for today for user {}", todayEvents.size(), userId);
+            
+            return todayEvents.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error getting events for today for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Error getting events for today", e);
+        }
+    }
+
+    private NearestEventDTO convertToNearestEventDTO(Event event, Long userId) {
+        LocalDateTime currentTime = LocalDateTime.now();
         
         // Вычисляем время до события
-        Duration timeUntilEvent = Duration.between(currentTime, nearestEvent.getDateTime());
+        Duration timeUntilEvent = Duration.between(currentTime, event.getDateTime());
         long totalMinutes = timeUntilEvent.toMinutes();
         
         // Форматируем время до события
@@ -961,7 +1008,7 @@ public class EventsService {
         String timeFormat = getTimeFormat(totalMinutes);
         
         // Конвертируем в DTO
-        EventDTO eventDTO = convertToDTO(nearestEvent);
+        EventDTO eventDTO = convertToDTO(event);
         
         return NearestEventDTO.builder()
                 .eventId(eventDTO.getEventId())
