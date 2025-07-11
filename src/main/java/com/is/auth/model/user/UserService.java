@@ -811,6 +811,28 @@ public class UserService {
         return userAvatars;
     }
 
+    @Transactional
+    public ResponseEntity<Response> updateUserLanguage(Long userId, String language) {
+        try {
+            Optional<UserAdditionalInfo> userInfo = userAdditionalInfoRepository.findById(userId);
+            if (!userInfo.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new Response(404, "USER_NOT_FOUND", "User not found"));
+            }
+
+            UserAdditionalInfo userAdditionalInfo = userInfo.get();
+            userAdditionalInfo.setLanguage(language);
+            userAdditionalInfoRepository.save(userAdditionalInfo);
+
+            log.info("Updated language for user {} to {}", userId, language);
+            return ResponseEntity.ok(new Response(200, "LANGUAGE_UPDATED", "Language updated successfully"));
+        } catch (Exception e) {
+            log.error("Error updating language for user {}: {}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new Response(500, "UPDATE_ERROR", "Error updating language"));
+        }
+    }
+
     @CacheEvict(value = "userProfilePictures", allEntries = true)
     public void clearUserProfilePicturesCache() {
         // Method to clear cache when needed

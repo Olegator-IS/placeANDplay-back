@@ -21,4 +21,11 @@ public class UserProfileController {
             @RequestHeader(value = "Accept-Language", defaultValue = "ru") String language) {
         return userService.getUserProfile(userId, language);
     }
+
+    @PutMapping("/{userId}/language")
+    public ResponseEntity<Response> updateUserLanguage(
+            @PathVariable Long userId,
+            @RequestParam String language) {
+        return userService.updateUserLanguage(userId, language);
+    }
 } 

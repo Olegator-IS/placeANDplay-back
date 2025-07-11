@@ -31,10 +31,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Duration;
-import java.util.List;
-import java.util.Objects;
-import java.util.ArrayList;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.is.events.dto.EventAvailabilityDTO;
@@ -46,6 +43,7 @@ import com.is.events.dto.UserEventStatisticsDTO;
 import com.is.events.dto.EventJoinAvailabilityResponse;
 import com.is.events.model.EventParticipant;
 import com.is.events.dto.NearestEventDTO;
+import com.is.events.dto.CheckInEventDTO;
 
 @Slf4j
 @Service
@@ -149,7 +147,8 @@ public class EventsService {
                                 participant.getParticipantId(),
                                 participant.getParticipantName(),
                                 participant.getJoinedAt(),
-                                profilePictureUrl
+                                profilePictureUrl,
+                                participant.getStatus()
                         );
                     })
                     .toList();
@@ -285,13 +284,15 @@ public class EventsService {
         // Проверка времени для перехода в IN_PROGRESS
         if (newStatus == EventStatus.IN_PROGRESS) {
             LocalDateTime now = LocalDateTime.now();
-            if (event.getDateTime().isAfter(now)) {
+            // Если до начала события больше 30 минут — не разрешаем старт
+            if (event.getDateTime().minusMinutes(30).isAfter(now)) {
                 throw new EventValidationException(
-                    "event_time_not_reached",
-                    String.format("Cannot start event before its scheduled time. Event time: %s, Current time: %s",
+                    "event_time_too_early",
+                    String.format("Cannot start event earlier than 30 minutes before its scheduled time. Event time: %s, Current time: %s",
                         event.getDateTime(), now)
                 );
             }
+            // Остальная логика проверки времени старта — только в event.startEvent()
         }
 
         if (!currentStatus.canTransitionTo(newStatus)) {
@@ -590,6 +591,18 @@ public class EventsService {
             case "uz_leave_error" -> "Tadbirlar tark etilganda xatolik yuz berdi";
             case "en_leave_error" -> "Error while leaving the event";
 
+            case "ru_already_checked_in" -> "Вы уже отметились на этом событии";
+            case "uz_already_checked_in" -> "Siz allaqachon bu tadbirda belgilangansiz";
+            case "en_already_checked_in" -> "You have already checked in for this event";
+
+            case "ru_checkin_not_confirmed" -> "Вы не можете отметиться на этом событии, так как оно еще не подтверждено организатором.";
+            case "uz_checkin_not_confirmed" -> "Siz ushbu tadbirda belgilanishingiz mumkin emas, chunki tashkilotchi hali tasdiqlanmagan.";
+            case "en_checkin_not_confirmed" -> "You cannot check in for this event as it has not been confirmed by the organizer.";
+
+            case "ru_checkin_time_window" -> "Вы можете отметиться на этом событии только в течение 30 минут до его начала.";
+            case "uz_checkin_time_window" -> "Siz ushbu tadbirda belgilanishingiz mumkin emas, chunki 30 daqiqadan oldin boshlanishi kerak.";
+            case "en_checkin_time_window" -> "You can only check in for this event within 30 minutes before its start.";
+
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };
     }
@@ -825,7 +838,7 @@ public class EventsService {
         confirmedEvents.forEach(event -> {
             try {
                 // Дополнительная проверка времени для большей точности
-                if (!event.getDateTime().isAfter(now)) {
+                if (event.getDateTime().isAfter(now)) {
                     event.startEvent();
                     eventsRepository.save(event);
                     Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
@@ -931,16 +944,63 @@ public class EventsService {
     public NearestEventDTO getNearestEventForUser(Long userId) {
         log.info("Getting nearest event for user {}", userId);
         
-        LocalDateTime currentTime = LocalDateTime.now();
-        Event nearestEvent = eventsRepository.findNearestUpcomingEventByUser(userId, currentTime);
-        
-        if (nearestEvent == null) {
-            log.info("No upcoming events found for user {}", userId);
-            return null;
+        try {
+            LocalDateTime currentTime = LocalDateTime.now();
+            Event nearestEvent = eventsRepository.findNearestEventForUser(userId, currentTime);
+            
+            if (nearestEvent == null) {
+                log.info("No nearest event found for user {}", userId);
+                return null;
+            }
+            
+            return convertToNearestEventDTO(nearestEvent, userId);
+        } catch (Exception e) {
+            log.error("Error getting nearest event for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Error getting nearest event", e);
         }
+    }
+
+    public EventDTO getCurrentInProgressEventForUser(Long userId) {
+        log.info("Getting current IN_PROGRESS event for user {}", userId);
+        
+        try {
+            Event currentEvent = eventsRepository.findCurrentInProgressEventForUser(userId);
+            
+            if (currentEvent == null) {
+                log.info("No current IN_PROGRESS event found for user {}", userId);
+                return null;
+            }
+            
+            return convertToDTO(currentEvent);
+        } catch (Exception e) {
+            log.error("Error getting current IN_PROGRESS event for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Error getting current IN_PROGRESS event", e);
+        }
+    }
+
+    public List<EventDTO> getEventsForToday(Long userId) {
+        log.info("Getting events for today for user {}", userId);
+        
+        try {
+            LocalDate today = LocalDate.now();
+            List<Event> todayEvents = eventsRepository.findEventsForTodayByUser(userId, today);
+            
+            log.info("Found {} events for today for user {}", todayEvents.size(), userId);
+            
+            return todayEvents.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error getting events for today for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Error getting events for today", e);
+        }
+    }
+
+    private NearestEventDTO convertToNearestEventDTO(Event event, Long userId) {
+        LocalDateTime currentTime = LocalDateTime.now();
         
         // Вычисляем время до события
-        Duration timeUntilEvent = Duration.between(currentTime, nearestEvent.getDateTime());
+        Duration timeUntilEvent = Duration.between(currentTime, event.getDateTime());
         long totalMinutes = timeUntilEvent.toMinutes();
         
         // Форматируем время до события
@@ -948,7 +1008,7 @@ public class EventsService {
         String timeFormat = getTimeFormat(totalMinutes);
         
         // Конвертируем в DTO
-        EventDTO eventDTO = convertToDTO(nearestEvent);
+        EventDTO eventDTO = convertToDTO(event);
         
         return NearestEventDTO.builder()
                 .eventId(eventDTO.getEventId())
@@ -993,5 +1053,169 @@ public class EventsService {
         } else {
             return "MINUTES";
         }
+    }
+
+    public List<CheckInEventDTO> getUserEventsForCheckIn(Long placeId, Long userId) {
+        log.info("Getting user events for check-in at place {} for user {}", placeId, userId);
+        LocalDate today = LocalDate.now();
+        LocalDateTime nowPlus30 = LocalDateTime.now().plusMinutes(30);
+        List<Event> events = eventsRepository.findEventsForCheckInTodaySimple(placeId, today, nowPlus30);
+        return events.stream()
+            .filter(event -> {
+                boolean isOrganizer = event.getOrganizerEvent() != null && event.getOrganizerEvent().getOrganizerId().equals(userId);
+                boolean isParticipant = event.getCurrentParticipants() != null && event.getCurrentParticipants().hasParticipant(userId);
+                return isOrganizer || isParticipant;
+            })
+            .map(event -> convertToCheckInDTO(event, userId))
+            .toList();
+    }
+
+    @Transactional
+    public void checkInParticipant(Long eventId, Long userId, String lang) {
+        log.info("Participant {} checking in for event {}", userId, eventId);
+        Event event = findAndValidateEvent(eventId, lang);
+
+        // Проверка статуса ивента
+        Set<EventStatus> allowedStatuses = EnumSet.of(EventStatus.CONFIRMED, EventStatus.IN_PROGRESS);
+        if (!allowedStatuses.contains(event.getStatus())) {
+            throw new EventValidationException("checkin_not_confirmed",
+                    returnTextToUserByLang(lang, "checkin_not_confirmed"));
+        }
+
+        // Проверка времени до начала ивента (разрешено за 30 минут до старта) и присоединение к ивенту,которое закончено нельзя
+        LocalDateTime now = LocalDateTime.now();
+        long minutesBefore = Duration.between(now, event.getDateTime()).toMinutes();
+
+        if (minutesBefore > 30) {
+            throw new EventValidationException("checkin_time_window",
+                    returnTextToUserByLang(lang, "checkin_time_window"));
+        }
+
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new EventValidationException("checkin_not_allowed",
+                    returnTextToUserByLang(lang, "checkin_not_allowed"));
+        }
+
+        boolean isOrganizer = event.getOrganizerEvent() != null && event.getOrganizerEvent().getOrganizerId().equals(userId);
+        boolean isParticipant = event.getCurrentParticipants() != null && event.getCurrentParticipants().hasParticipant(userId);
+
+        // Если пользователь не участник и не организатор — ошибка
+        if (!isParticipant && !isOrganizer) {
+            throw new EventValidationException("not_participant",
+                    returnTextToUserByLang(lang, "not_participant"));
+        }
+
+        // Если пользователь уже участник — проверяем статус
+        if (isParticipant) {
+            String currentStatus = event.getCurrentParticipants().getParticipants().stream()
+                    .filter(p -> p.getParticipantId().equals(userId))
+                    .map(CurrentParticipants.Participant::getStatus)
+                    .findFirst()
+                    .orElse("ACTIVE");
+            if ("PRESENT".equals(currentStatus)) {
+                throw new EventValidationException("already_checked_in",
+                        returnTextToUserByLang(lang, "already_checked_in"));
+            }
+            // Отмечаем присутствие
+            event.getCurrentParticipants().checkInParticipant(userId);
+        } else if (isOrganizer) {
+            // Если организатор не в списке участников — добавляем его как PRESENT
+            String organizerName = event.getOrganizerEvent().getOrganizerName();
+            CurrentParticipants.Participant organizerParticipant = new CurrentParticipants.Participant(
+                    userId, organizerName, "PRESENT", now, now
+            );
+            event.getCurrentParticipants().getParticipants().add(organizerParticipant);
+            event.getCurrentParticipants().setSize(event.getCurrentParticipants().getParticipants().size());
+        }
+
+        eventsRepository.save(event);
+
+        // Отправляем сообщение в чат
+        String userName = isParticipant ? event.getCurrentParticipants().getParticipantName(userId) : event.getOrganizerEvent().getOrganizerName();
+        eventMessageService.sendEventMessage(event, EventMessageType.PARTICIPANT_CHECKED_IN, userName, lang);
+
+        log.info("Participant {} successfully checked in for event {}", userId, eventId);
+    }
+
+    private CheckInEventDTO convertToCheckInDTO(Event event, Long userId) {
+        // Определяем роль пользователя
+        boolean isOrganizer = event.getOrganizerEvent() != null && 
+                             event.getOrganizerEvent().getOrganizerId().equals(userId);
+        
+        String userRole = isOrganizer ? "ORGANIZER" : "PARTICIPANT";
+        
+        // Определяем статус пользователя в ивенте
+        String userStatus = "ACTIVE";
+        if (event.getCurrentParticipants() != null) {
+            userStatus = event.getCurrentParticipants().getParticipants().stream()
+                    .filter(p -> p.getParticipantId().equals(userId))
+                    .map(CurrentParticipants.Participant::getStatus)
+                    .findFirst()
+                    .orElse(isOrganizer ? "ORGANIZER" : "ACTIVE");
+        }
+        
+        // Определяем возможности пользователя
+        boolean canStart = isOrganizer && event.getStatus() == EventStatus.CONFIRMED
+            && !event.getDateTime().minusMinutes(30).isAfter(LocalDateTime.now());
+        boolean canCheckIn = "ACTIVE".equals(userStatus);
+        
+        // Конвертируем участников
+        List<ParticipantDTO> participants = new ArrayList<>();
+        if (event.getCurrentParticipants() != null) {
+            participants = event.getCurrentParticipants().getParticipants().stream()
+                    .map(participant -> {
+                        String profilePictureUrl = null;
+                        try {
+                            profilePictureUrl = userProfileService.getProfilePictureUrl(participant.getParticipantId());
+                        } catch (Exception e) {
+                            log.warn("Could not fetch profile picture for participant {}", participant.getParticipantId());
+                        }
+                        return new ParticipantDTO(
+                                participant.getParticipantId(),
+                                participant.getParticipantName(),
+                                participant.getJoinedAt(),
+                                profilePictureUrl,
+                                participant.getStatus()
+                        );
+                    })
+                    .toList();
+        }
+        
+        // Конвертируем организатора
+        OrganizerDTO organizer = null;
+        if (event.getOrganizerEvent() != null) {
+            organizer = OrganizerDTO.builder()
+                    .organizerId(event.getOrganizerEvent().getOrganizerId())
+                    .name(event.getOrganizerEvent().getOrganizerName())
+                    .email(event.getOrganizerEvent().getEmail())
+                    .phoneNumber(event.getOrganizerEvent().getPhoneNumber())
+                    .organizationType("INDIVIDUAL")
+                    .rating(4.8)
+                    .build();
+            
+            try {
+                String profilePictureUrl = userProfileService.getProfilePictureUrl(event.getOrganizerEvent().getOrganizerId());
+                organizer.setProfilePictureUrl(profilePictureUrl);
+            } catch (Exception e) {
+                log.warn("Could not fetch profile picture for organizer {}", event.getOrganizerEvent().getOrganizerId());
+            }
+        }
+        
+        return CheckInEventDTO.builder()
+                .eventId(event.getEventId())
+                .title(event.getTitle())
+                .description(event.getDescription())
+                .dateTime(event.getDateTime())
+                .status(event.getStatus().name())
+                .userRole(userRole)
+                .canStart(canStart)
+                .canCheckIn(canCheckIn)
+                .userStatus(userStatus)
+                .participants(participants)
+                .organizer(organizer)
+                .location(event.getSportEvent().getLocation())
+                .price(event.getSportEvent().getPrice())
+                .additionalInfo(event.getAdditionalInfo())
+                .build();
     }
 }
