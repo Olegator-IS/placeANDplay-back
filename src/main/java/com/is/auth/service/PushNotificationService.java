@@ -8,6 +8,8 @@ import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
 import com.is.auth.model.UserFcmToken;
 import com.is.auth.repository.UserFcmTokenRepository;
+import com.is.auth.repository.UserAdditionalInfoRepository;
+import com.is.auth.model.user.UserAdditionalInfo;
 import com.is.events.model.Event;
 import com.is.events.model.EventParticipant;
 import com.is.events.model.enums.EventStatus;
@@ -28,6 +30,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -37,6 +41,7 @@ public class PushNotificationService {
     private FirebaseMessaging firebaseMessaging;
     private final UserFcmTokenRepository userFcmTokenRepository;
     private final PlaceRepository placeRepository;
+    private final UserAdditionalInfoRepository userAdditionalInfoRepository;
     @Autowired
     private NotificationService notificationService;
     
@@ -130,33 +135,91 @@ public class PushNotificationService {
     // Уведомление об изменении статуса ивента
     public void sendEventStatusChangeNotification(Event event, EventStatus newStatus) {
         try {
-
             Place place = placeRepository.findPlaceByPlaceId(event.getPlaceId());
 
-            List<UserFcmToken> organizerTokens = userFcmTokenRepository.findByUserId(event.getOrganizerEvent().getOrganizerId());
-            
-            String title = "Статус события изменен";
-            String body = switch (newStatus) {
-                case CONFIRMED -> String.format("Событие по игре в \"%s\" подтверждено организацией \"%s\" ", event.getSportEvent().getSportName(),place.getName());
-                case REJECTED -> String.format("Событие по игре \"%s\" отклонено организацией \"%s\" ", event.getSportEvent().getSportName(),place.getName());
-                case CHANGES_REQUESTED -> String.format("Организация \"%s\" запросила изменения в событии \"%s\"", place.getName(),event.getSportEvent().getSportName());
-                default -> String.format("Статус события \"%s\" изменен на %s", event.getSportEvent().getSportName(), newStatus);
-            };
+            // Собираем всех участников (включая организатора)
+            Set<Long> userIds = new HashSet<>();
+            if (event.getCurrentParticipants() != null && event.getCurrentParticipants().getParticipants() != null) {
+                event.getCurrentParticipants().getParticipants().forEach(p -> userIds.add(p.getParticipantId()));
+            }
+            userIds.add(event.getOrganizerEvent().getOrganizerId());
 
-            for (UserFcmToken token : organizerTokens) {
-                Message message = Message.builder()
-                    .setToken(token.getToken())
-                    .setNotification(Notification.builder()
-                        .setTitle(title)
-                        .setBody(body)
-                        .build())
-                    .putData("type", "EVENT_STATUS_CHANGED")
-                    .putData("eventId", event.getEventId().toString())
-                    .putData("newStatus", newStatus.name())
-                    .build();
+            // Форматируем дату и время
+            String date = event.getDateTime().format(DATE_FORMATTER);
+            String time = event.getDateTime().format(TIME_FORMATTER);
 
-                String response = firebaseMessaging.send(message);
-                log.info("Successfully sent event status change notification: {}", response);
+            // Мультиязычные тексты
+            Map<String, String> confirmedTexts = Map.of(
+                "ru", String.format("Отличные новости! Заведение %s подтвердило ваше бронирование на %s в %s. Готовьтесь к игре! ⚽️", place.getName(), date, time),
+                "uz", String.format("Ajoyib yangilik! %s joyi sizning broningizni %s kuni, soat %s ga tasdiqladi. O‘yin uchun tayyorlaning! ⚽️", place.getName(), date, time),
+                "en", String.format("Great news! Venue %s has confirmed your booking for %s at %s. Get ready to play! ⚽️", place.getName(), date, time)
+            );
+            Map<String, String> rejectedTexts = Map.of(
+                "ru", String.format("К сожалению, заведение %s отклонило ваше бронирование. Попробуйте выбрать другую дату или место.", place.getName()),
+                "uz", String.format("Afsuski, %s joyi sizning broningizni rad etdi. Iltimos, boshqa sana yoki joy tanlang.", place.getName()),
+                "en", String.format("Unfortunately, venue %s has rejected your booking. Please try another date or place.", place.getName())
+            );
+            Map<String, String> changesTexts = Map.of(
+                "ru", String.format("Заведение %s запросило изменения в вашем событии. Проверьте детали и подтвердите!", place.getName()),
+                "uz", String.format("%s joyi tadbiringizda o‘zgarishlarni so‘radi. Tafsilotlarni tekshirib, tasdiqlang!", place.getName()),
+                "en", String.format("Venue %s has requested changes to your event. Please check the details and confirm!", place.getName())
+            );
+            Map<String, String> pendingTexts = Map.of(
+                "ru", String.format("Вы на шаг ближе к игре! Ваша заявка на проведение игры отправлена в %s. Ждём ответа от заведения. Держим кулачки! 🤞", place.getName()),
+                "uz", String.format("O‘yinga bir qadam yaqinroq! O‘yin o‘tkazish uchun so‘rovingiz %s joyiga yuborildi. Javobni kutamiz. Omad tilaymiz! 🤞", place.getName()),
+                "en", String.format("You’re one step closer to the game! Your request to host a game has been sent to %s. Waiting for the venue’s response. Fingers crossed! 🤞", place.getName())
+            );
+            Map<String, String> inProgressTexts = Map.of(
+                "ru", "Ну что ж, этот момент настал! Ваша игра начинается прямо сейчас. Желаем крутых эмоций и отличной компании! Удачи на поле! ⚽️🔥",
+                "uz", "Mana shu lahza yetib keldi! O‘yin hozir boshlanadi. Zo‘r kayfiyat va yaxshi jamoa tilaymiz! Omad! ⚽️🔥",
+                "en", "The moment has come! Your game starts now. Wishing you great vibes and awesome teammates! Good luck on the field! ⚽️🔥"
+            );
+
+            for (Long userId : userIds) {
+                // Получаем язык пользователя
+                String lang = "ru";
+                try {
+                    UserAdditionalInfo info = userAdditionalInfoRepository.findById(userId).orElse(null);
+                    if (info != null && info.getLanguage() != null) {
+                        lang = info.getLanguage();
+                    }
+                } catch (Exception ignored) {}
+
+                String title = switch (lang) {
+                    case "uz" -> "Tadbir holati o‘zgardi";
+                    case "en" -> "Event status updated";
+                    default -> "Статус события изменен";
+                };
+                String body = switch (newStatus) {
+                    case CONFIRMED -> confirmedTexts.getOrDefault(lang, confirmedTexts.get("ru"));
+                    case REJECTED -> rejectedTexts.getOrDefault(lang, rejectedTexts.get("ru"));
+                    case CHANGES_REQUESTED -> changesTexts.getOrDefault(lang, changesTexts.get("ru"));
+                    case CANCELLED -> rejectedTexts.getOrDefault(lang, changesTexts.get("ru"));
+                    case PENDING_APPROVAL -> pendingTexts.getOrDefault(lang, pendingTexts.get("ru"));
+                    case IN_PROGRESS -> inProgressTexts.getOrDefault(lang, inProgressTexts.get("ru"));
+                    default -> switch (lang) {
+                        case "uz" -> String.format("Tadbir holati %s ga o‘zgardi", newStatus.name());
+                        case "en" -> String.format("Event status changed to %s", newStatus.name());
+                        default -> String.format("Статус события изменен на %s", newStatus.name());
+                    };
+                };
+
+                List<UserFcmToken> tokens = userFcmTokenRepository.findByUserId(userId);
+                for (UserFcmToken token : tokens) {
+                    Message message = Message.builder()
+                        .setToken(token.getToken())
+                        .setNotification(Notification.builder()
+                            .setTitle(title)
+                            .setBody(body)
+                            .build())
+                        .putData("type", "EVENT_STATUS_CHANGED")
+                        .putData("eventId", event.getEventId().toString())
+                        .putData("newStatus", newStatus.name())
+                        .build();
+
+                    String response = firebaseMessaging.send(message);
+                    log.info("Successfully sent event status change notification to user {}: {}", userId, response);
+                }
             }
         } catch (Exception e) {
             log.error("Error sending event status change notification", e);

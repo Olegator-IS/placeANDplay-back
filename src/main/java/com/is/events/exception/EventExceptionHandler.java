@@ -16,7 +16,7 @@ public class EventExceptionHandler {
                 LocalDateTime.now(),
                 HttpStatus.BAD_REQUEST.value(),
                 ex.getMessage(),
-                "Validation Error"
+                ex.getCode() // теперь возвращаем код ошибки
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
