@@ -44,6 +44,8 @@ import com.is.events.dto.EventJoinAvailabilityResponse;
 import com.is.events.model.EventParticipant;
 import com.is.events.dto.NearestEventDTO;
 import com.is.events.dto.CheckInEventDTO;
+import com.is.auth.repository.UserAdditionalInfoRepository;
+import com.is.auth.model.user.UserAdditionalInfo;
 
 @Slf4j
 @Service
@@ -60,6 +62,7 @@ public class EventsService {
     private final EmailService emailService;
     private final PlaceRepository placeRepository;
     private final PushNotificationService pushNotificationService;
+    private final UserAdditionalInfoRepository userAdditionalInfoRepository;
 
 //    @Autowired
 //    private Logger logger;
@@ -288,8 +291,7 @@ public class EventsService {
             if (event.getDateTime().minusMinutes(30).isAfter(now)) {
                 throw new EventValidationException(
                     "event_time_too_early",
-                    String.format("Cannot start event earlier than 30 minutes before its scheduled time. Event time: %s, Current time: %s",
-                        event.getDateTime(), now)
+                    String.format(returnTextToUserByLang(lang, "event_time_too_early"), event.getDateTime(), now)
                 );
             }
             // Остальная логика проверки времени старта — только в event.startEvent()
@@ -297,7 +299,12 @@ public class EventsService {
 
         if (!currentStatus.canTransitionTo(newStatus)) {
             throw new EventValidationException("status_transition_error",
-                    String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+                String.format(returnTextToUserByLang(lang, "status_transition_error"), currentStatus, newStatus));
+        }
+
+        // Если статус меняется на COMPLETED, используем специальную логику
+        if (newStatus == EventStatus.COMPLETED) {
+            return completeEvent(eventId);
         }
 
         event.setStatus(newStatus);
@@ -318,7 +325,6 @@ public class EventsService {
         webSocketService.notifyEventUpdate(event.getPlaceId());
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
         Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
-
 
         emailService.sendEventStatusChangeNotification(event,lang,getPlace.getName(),getPlace.getPhone());
         return savedEvent;
@@ -603,6 +609,14 @@ public class EventsService {
             case "uz_checkin_time_window" -> "Siz ushbu tadbirda belgilanishingiz mumkin emas, chunki 30 daqiqadan oldin boshlanishi kerak.";
             case "en_checkin_time_window" -> "You can only check in for this event within 30 minutes before its start.";
 
+            case "ru_event_time_too_early" -> "Нельзя начать событие раньше, чем за 30 минут до его запланированного времени. Время события: %s, Текущее время: %s";
+            case "uz_event_time_too_early" -> "Tadbir rejalashtirilgan vaqtdan 30 daqiqadan oldin boshlanishi mumkin emas. Tadbir vaqti: %s, Joriy vaqt: %s";
+            case "en_event_time_too_early" -> "Cannot start event earlier than 30 minutes before its scheduled time. Event time: %s, Current time: %s";
+
+            case "ru_status_transition_error" -> "Нельзя сменить статус с %s на %s";
+            case "uz_status_transition_error" -> "Statusni %s dan %s ga o'zgartirib bo'lmaydi";
+            case "en_status_transition_error" -> "Cannot transition from %s to %s";
+
             default -> throw new IllegalArgumentException("Unsupported language/action: " + lang + "_" + action);
         };
     }
@@ -807,7 +821,58 @@ public class EventsService {
     public Event completeEvent(Long eventId) {
         Event event = findEventById(eventId);
         event.complete();
-        return eventsRepository.save(event);
+        Event savedEvent = eventsRepository.save(event);
+
+        // Мультиязычные тексты уведомлений
+        Map<String, String> participantTexts = Map.of(
+            "ru", "🏁 Всё! Игра сделана!\nВы крутые – сегодня был настоящий движ! 💥\nНе забудьте отблагодарить организатора – он всё устроил 💼→⚽️\nОценка — это ваш лайк в реальной жизни 🌟",
+            "uz", "🏁 Tamom! O‘yin tugadi!\nBugun haqiqiy o‘yin / jang / harakat bo‘ldi – sizlar zo‘rsiz! 💥\nHammasini uyushtirgan tashkilotchiga rahmat aytishni unutmang 💼→⚽️\nBaholash – bu haqiqiy hayotdagi “like” 🌟",
+            "en", "🏁 That’s a wrap! Game over!\nYou rocked it — what a match / clash / epic vibe today! 💥\nDon’t forget to thank the organizer — they made it all happen 💼→⚽️\nA rating is your real-life like 🌟"
+        );
+        Map<String, String> organizerTexts = Map.of(
+            "ru", "🎉 Миссия выполнена! Ивент на ура!\nКоманда собралась, эмоции зарядили — время выдохнуть 😮‍💨\nТеперь оцените своих игроков — кто был душой компании, а кто «тихо, но метко» 🎯\nВаш отзыв — как медаль на память 🏅",
+            "uz", "🎉 Vazifa bajarildi! Tadbir zo‘r o‘tdi!\nJamoa yig‘ildi, hissiyotlar chaqnadi — endi chuqur nafas oling 😮‍💨\nEndi ishtirokchilaringizni baholang — kim kompaniyaning yuragi bo‘ldi, kim esa «jim-jit, lekin aniq» 🎯\nSizning fikringiz – bu esdalik medali 🏅",
+            "en", "🎉 Mission accomplished! The event was a blast!\nThe team showed up, the energy was high — now take a deep breath 😮‍💨\nTime to rate your players — who brought the fire, and who played it cool but sharp 🎯\nYour feedback is a medal of honor 🏅"
+        );
+
+        // Отправка push-уведомлений участникам
+        if (event.getCurrentParticipants() != null && event.getCurrentParticipants().getParticipants() != null) {
+            event.getCurrentParticipants().getParticipants().forEach(participant -> {
+                if (!participant.getParticipantId().equals(event.getOrganizerEvent().getOrganizerId())) {
+                    String lang = "ru";
+                    try {
+                        UserAdditionalInfo info = userAdditionalInfoRepository.findById(participant.getParticipantId()).orElse(null);
+                        if (info != null && info.getLanguage() != null) {
+                            lang = info.getLanguage();
+                        }
+                    } catch (Exception ignored) {}
+                    String text = participantTexts.getOrDefault(lang, participantTexts.get("ru"));
+                    pushNotificationService.sendSimpleNotification(
+                        participant.getParticipantId(),
+                        "Ивент завершился!",
+                        text,
+                        "EVENT_COMPLETED"
+                    );
+                }
+            });
+        }
+        // Отправка push-уведомления организатору
+        String orgLang = "ru";
+        try {
+            UserAdditionalInfo orgInfo = userAdditionalInfoRepository.findById(event.getOrganizerEvent().getOrganizerId()).orElse(null);
+            if (orgInfo != null && orgInfo.getLanguage() != null) {
+                orgLang = orgInfo.getLanguage();
+            }
+        } catch (Exception ignored) {}
+        String orgText = organizerTexts.getOrDefault(orgLang, organizerTexts.get("ru"));
+        pushNotificationService.sendSimpleNotification(
+            event.getOrganizerEvent().getOrganizerId(),
+            "Ивент завершился!",
+            orgText,
+            "EVENT_COMPLETED_ORG"
+        );
+
+        return savedEvent;
     }
 
     public Event cancelEvent(Long eventId, Long organizationId) {
