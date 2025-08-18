@@ -10,7 +10,7 @@ import com.is.auth.model.user.LoginRequest;
 import com.is.auth.model.user.RegistrationAddInfoRequest;
 import com.is.auth.model.user.RegistrationRequest;
 import com.is.auth.model.user.UserService;
-import com.is.auth.service.EmailService;
+import com.is.auth.service.PhoneService;
 import com.is.events.service.WebSocketService;
 import io.swagger.annotations.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -39,14 +39,14 @@ public class RbsControllerAuth {
 
     private static final Logger log = LoggerFactory.getLogger(RbsControllerAuth.class);
     private final UserService userService;
-    private final EmailService emailService;
+    private final PhoneService phoneService;
     private final WebSocketService webSocketService;
 
     @Autowired
-    public RbsControllerAuth(UserService userService, EmailService emailService, WebSocketService webSocketService) {
+    public RbsControllerAuth(UserService userService, PhoneService phoneService, WebSocketService webSocketService) {
         log.info("RbsControllerAuth initialized!");
         this.userService = userService;
-        this.emailService = emailService;
+        this.phoneService = phoneService;
         this.webSocketService = webSocketService;
     }
 
@@ -249,29 +249,30 @@ public class RbsControllerAuth {
         return userService.getListOfCountries(language);
     }
 
-    @GetMapping("/emailVerification")
-    public ResponseEntity<?> sendCodeToMail(@RequestParam String email,
+
+    @GetMapping("/phoneNumberVerification")
+    public ResponseEntity<?> sendCodeToBotVerification(@RequestParam String phoneNumber,
                                             @RequestHeader(value = "language", required = true) String language,
                                             @RequestHeader String accessToken,
                                             @RequestHeader String refreshToken) throws MessagingException {
         validateLanguage(language);
-        return emailService.sendVerificationEmail(email,language);
+        return phoneService.sendVerificationPhoneNumber(phoneNumber,language);
     }
 
 
     @PostMapping("/send-MVP-message")
     public ResponseEntity<?> sendMessageToMyMail(@RequestParam String email,@RequestBody String message) throws MessagingException {
-        return emailService.sendMessageToMyMail(email,message);
+        return phoneService.sendMessageToMyMail(email,message);
     }
 
     @GetMapping("/verifyCode")
-    public ResponseEntity<?> verifyCode(@RequestParam String email,
+    public ResponseEntity<?> verifyCode(@RequestParam String phoneNumber,
                                         @RequestParam int code,
                                         @RequestHeader(value = "language", required = true) String language,
                                         @RequestHeader String accessToken,
                                         @RequestHeader String refreshToken) throws MessagingException {
         validateLanguage(language);
-        return emailService.verifyCode(email,code,language);
+        return phoneService.verifyCode(phoneNumber,code,language);
     }
     @GetMapping("/testSystem")
     public ResponseEntity<ResponseToken> getUserInfo(){
@@ -331,12 +332,12 @@ public class RbsControllerAuth {
         @ApiResponse(code = 404, message = "User not found"),
         @ApiResponse(code = 500, message = "Internal server error")
     })
-    @GetMapping("/email/verification-status")
-    public ResponseEntity<?> checkEmailVerificationStatus(
-            @RequestParam String email,
+    @GetMapping("/phone/verification-status")
+    public ResponseEntity<?> checkPhoneVerificationStatus(
+            @RequestParam String phone,
             @RequestHeader(value = "language", required = true) String language) {
         validateLanguage(language);
-        return userService.checkEmailVerificationStatus(email, language);
+        return userService.checkPhoneVerificationStatus(phone, language);
     }
 
     @GetMapping("/health/ws")

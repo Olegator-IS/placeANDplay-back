@@ -1,9 +1,8 @@
 package com.is.events.scheduler;
 
-import com.is.auth.service.EmailService;
+import com.is.auth.service.PhoneService;
 import com.is.auth.service.PushNotificationService;
 import com.is.auth.repository.UserRepository;
-import com.is.auth.model.user.User;
 import com.is.auth.model.user.UserAdditionalInfo;
 import com.is.auth.repository.UserAdditionalInfoRepository;
 import com.is.events.model.Event;
@@ -36,7 +35,7 @@ public class EventScheduler {
     private final WebSocketService webSocketService;
     private final EventMessageService eventMessageService;
     private final PlaceRepository placeRepository;
-    private final EmailService emailService;
+    private final PhoneService emailService;
     private final PushNotificationService pushNotificationService;
     private final LocalizationService localizationService;
     private final UserRepository userRepository;

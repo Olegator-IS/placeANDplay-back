@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
         "password - в открытом виде,fisrt_name и last_name")
 
 public class RegistrationRequest {
-    @ApiModelProperty(value = "email", example = "abramov.o.o.1998@gmail.com")
-    private String email;
+    @ApiModelProperty(value = "phoneNumber", example = "+998998888931")
+    private String phoneNumber;
     @ApiModelProperty(value = "password", example = "Test123")
     private String password;
     @ApiModelProperty(value = "firstName", example = "Oleg")
@@ -22,8 +22,8 @@ public class RegistrationRequest {
     @ApiModelProperty(value = "lastName", example = "Abramov")
     private String lastName;
 
-    public RegistrationRequest(String email,String password,String firstName,String lastName){
-        this.email = email;
+    public RegistrationRequest(String phoneNumber,String password,String firstName,String lastName){
+        this.phoneNumber = phoneNumber;
         this.password = password;
         this.firstName = firstName;
         this.lastName = lastName;

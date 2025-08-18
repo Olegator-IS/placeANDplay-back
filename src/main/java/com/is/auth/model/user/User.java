@@ -18,8 +18,8 @@ public class User {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(nullable = false, unique = true)
-    private String email;
+    @Column(name = "phonenumber",nullable = false, unique = true)
+    private String phoneNumber;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
@@ -30,8 +30,8 @@ public class User {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "is_email_verified")
-    private boolean emailVerified;
+    @Column(name = "is_phone_verified")
+    private boolean phoneVerified;
 
     @Column(name = "registration_date")
     private LocalDateTime registrationDate;

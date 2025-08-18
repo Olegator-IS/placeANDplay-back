@@ -5,7 +5,6 @@ import com.is.auth.config.JwtAuthenticationFilter;
 import com.is.auth.config.TokenSecurity;
 import com.is.auth.model.dto.ActivityStatsDTO;
 import com.is.auth.model.dto.ReputationDTO;
-import com.is.auth.model.user.UserInfoResponse;
 import com.is.auth.exception.UserAlreadyExistsException;
 import com.is.auth.model.ResponseAnswers.Response;
 import com.is.auth.model.enums.Language;
@@ -15,14 +14,13 @@ import com.is.auth.model.logger.Logger;
 import com.is.auth.model.sports.SkillsDTO;
 import com.is.auth.model.sports.SportsDTO;
 import com.is.auth.repository.*;
-import com.is.auth.service.EmailService;
+import com.is.auth.service.PhoneService;
 import com.is.auth.service.RequestLogger;
 import com.is.auth.service.FileStorageService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -40,12 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.CacheEvict;
 
 import javax.crypto.SecretKey;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.*;
@@ -72,7 +64,7 @@ public class UserService {
     private final ListOfCitiesRepository listOfCitiesRepository;
     private final ListOfCountriesRepository listOfCountriesRepository;
     private final FileStorageService fileStorageService;
-    private final EmailService emailService;
+    private final PhoneService emailService;
     private final UserHobbyRepository userHobbyRepository;
     private final UserContactRepository userContactRepository;
     private final UserActivityStatsRepository userActivityStatsRepository;
@@ -99,7 +91,7 @@ public class UserService {
                       ListOfCitiesRepository listOfCitiesRepository,
                       ListOfCountriesRepository listOfCountriesRepository,
                       FileStorageService fileStorageService,
-                      EmailService emailService,
+                      PhoneService emailService,
                       UserHobbyRepository userHobbyRepository,
                       UserContactRepository userContactRepository,
                       UserActivityStatsRepository userActivityStatsRepository,
@@ -125,13 +117,13 @@ public class UserService {
         this.objectMapper = objectMapper;
     }
 
-    private User createNewUser(String email, String password, String firstName, String lastName) {
+    private User createNewUser(String phoneNumber, String password, String firstName, String lastName) {
         return User.builder()
-                .email(email)
+                .phoneNumber(phoneNumber)
                 .passwordHash(passwordEncoder.encode(password))
                 .firstName(firstName)
                 .lastName(lastName)
-                .emailVerified(false)
+                .phoneVerified(false)
                 .registrationDate(LocalDateTime.now())
                 .build();
     }
@@ -154,12 +146,12 @@ public class UserService {
                                                       long currentTime, long executionTime, String language,
                                                       RegistrationRequest registrationRequest) {
         try {
-            if (userRepository.existsByEmail(registrationRequest.getEmail())) {
-                throw new UserAlreadyExistsException(registrationRequest.getEmail());
+            if (userRepository.existsByPhoneNumber(registrationRequest.getPhoneNumber())) {
+                throw new UserAlreadyExistsException(registrationRequest.getPhoneNumber());
             }
 
             User user = createNewUser(
-                    registrationRequest.getEmail(),
+                    registrationRequest.getPhoneNumber(),
                     registrationRequest.getPassword(),
                     registrationRequest.getFirstName(),
                     registrationRequest.getLastName()
@@ -169,12 +161,12 @@ public class UserService {
             Response response = new Response(HttpStatus.CREATED.value(), "USER_CREATED_SUCCESSFULLY", user.getUserId());
             requestLogger.logRequest(HttpStatus.CREATED, currentTime, method, url, requestId, clientIp, executionTime,
                     registrationRequest, response);
-            emailService.sendWelcomeEmail(user.getEmail(),language);
+//            emailService.sendWelcomeEmail(user.getEmail(),language);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (UserAlreadyExistsException e) {
-            Response response = new Response("EMAIL_IS_ALREADY_EXIST", "Email already in use",
+            Response response = new Response("PHONENUMBER_IS_ALREADY_EXIST", "Phone number already in use",
                     HttpStatus.CONFLICT.value());
             requestLogger.logRequest(HttpStatus.CONFLICT, currentTime, method, url, requestId, clientIp, executionTime,
                     registrationRequest, response);
@@ -331,7 +323,7 @@ public class UserService {
 
             if (claims.getSubject() != null) {
                 User user = !claims.getSubject().equals("GUEST") ?
-                        userRepository.getUserInfoByEmail((claims.getSubject())) : null;
+                        userRepository.getUserInfoByPhoneNumber((claims.getSubject())) : null;
 
                 Optional<UserAdditionalInfo> userAddInfo = user != null ?
                         userAdditionalInfoRepository.findById(user.getUserId()) :
@@ -384,9 +376,9 @@ public class UserService {
             .userId(user.getUserId())
             .firstName(user.getFirstName())
             .lastName(user.getLastName())
-            .email(user.getEmail())
+            .email(user.getPhoneNumber())
             .role("USER")
-            .isEmailVerified(user.isEmailVerified())
+            .isPhoneVerified(user.isPhoneVerified())
             .profilePictureUrl("")
             .build();
 
@@ -456,12 +448,12 @@ public class UserService {
         try {
             String decryptedToken = TokenSecurity.decryptToken(refreshToken, secretKey);
             Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
-            User user = userRepository.getUserInfoByEmail((claims.getSubject()));
+            User user = userRepository.getUserInfoByPhoneNumber((claims.getSubject()));
 
             Authentication authentication = customAuthenticationProvider.authenticate(
-                    new UsernamePasswordAuthenticationToken(user.getEmail(), user.getPasswordHash())
+                    new UsernamePasswordAuthenticationToken(user.getPhoneNumber(), user.getPasswordHash())
             );
-            String jwtToken = jwtAuthenticationFilter.generateToken(user.getEmail(), authentication);
+            String jwtToken = jwtAuthenticationFilter.generateToken(user.getPhoneNumber(), authentication);
 
             Map<String, Object> tokenInfo = new HashMap<>();
             tokenInfo.put("accessToken", TokenSecurity.encryptToken(jwtToken, secretKey));
@@ -587,8 +579,8 @@ public class UserService {
                                                  long currentTime,long executionTime,
                                                  String language,LoginRequest loginRequest,
                                                  boolean isUser) {
-        if (!userRepository.existsByEmail(loginRequest.getEmail())&&isUser) {
-            Response response = new Response("EMAIL_IS_NOT_FOUND", "Required email is not found",
+        if (!userRepository.existsByPhoneNumber(loginRequest.getPhoneNumber())&&isUser) {
+            Response response = new Response("PHONE_NUMBER_IS_NOT_FOUND", "Required phone number is not found",
                     HttpStatus.UNAUTHORIZED.value());
             logger.logRequestDetails(HttpStatus.UNAUTHORIZED,currentTime,method,url,requestId,clientIp,executionTime,loginRequest,response);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
@@ -596,12 +588,12 @@ public class UserService {
 
         try {
             loginRequest.setPassword(isUser ? loginRequest.getPassword() : "GUEST");
-            loginRequest.setEmail(isUser ? loginRequest.getEmail() : "GUEST");
+            loginRequest.setPhoneNumber(isUser ? loginRequest.getPhoneNumber() : "GUEST");
             String storedHashedPassword = isUser
-                    ? userRepository.getUserInfoByEmail(loginRequest.getEmail()).getPasswordHash()
+                    ? userRepository.getUserInfoByPhoneNumber(loginRequest.getPhoneNumber()).getPasswordHash()
                     : passwordEncoder.encode("GUEST");
             if (passwordEncoder.matches(loginRequest.getPassword(), storedHashedPassword)) {
-                Response responseToken =    getToken(loginRequest.getEmail(), loginRequest.getPassword()).getBody();
+                Response responseToken =    getToken(loginRequest.getPhoneNumber(), loginRequest.getPassword()).getBody();
                 assert responseToken != null;
                 Response response = new Response(HttpStatus.OK.value(), "User log in successfully",
                         responseToken.getTokenInfo());
@@ -738,16 +730,17 @@ public class UserService {
         return userRepository;
     }
 
-    public ResponseEntity<?> checkEmailVerificationStatus(String email, String language) {
+    public ResponseEntity<?> checkPhoneVerificationStatus(String phoneNumber, String language) {
         Map<String, Object> response = new HashMap<>();
         Map<String, String> messages = Map.of(
-            "ru", "Email не подтвержден. Пожалуйста, проверьте вашу почту или запросите новый код подтверждения.",
-            "en", "Email is not verified. Please check your inbox or request a new verification code.",
-            "uz", "Email tasdiqlanmagan. Iltimos, pochtangizni tekshiring yoki yangi tasdiqlash kodini so'rang."
+                "ru", "Телефонный номер не подтвержден. Пожалуйста, воспользуйтесь нашим телеграм-ботом для авторизации.",
+                "en", "Phone number is not verified. Please use our Telegram bot for authorization.",
+                "uz", "Telefon raqami tasdiqlanmagan. Iltimos, avtorizatsiya uchun Telegram botimizdan foydalaning."
         );
-        
+
+
         try {
-            Optional<User> userOptional = userRepository.findByEmail(email);
+            Optional<User> userOptional = userRepository.findByPhoneNumber(phoneNumber);
             if (userOptional.isEmpty()) {
                 response.put("status", "error");
                 response.put("message", "User not found");
@@ -756,15 +749,15 @@ public class UserService {
 
             User user = userOptional.get();
             response.put("status", "success");
-            response.put("isVerified", user.isEmailVerified());
+            response.put("isVerified", user.isPhoneVerified());
             
-            if (!user.isEmailVerified()) {
+            if (!user.isPhoneVerified()) {
                 response.put("message", messages.getOrDefault(language, messages.get("ru")));
             }
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Error checking email verification status for email: {}", email, e);
+            log.error("Error checking phonenumber verification status for phone: {}", phoneNumber, e);
             response.put("status", "error");
             response.put("message", "Internal server error");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
