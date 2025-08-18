@@ -1,7 +1,8 @@
 package com.is.auth.service;
 
-import com.is.auth.model.email.EmailVerificationCode;
-import com.is.auth.repository.EmailVerificationCodeRepository;
+import com.is.auth.model.phoneNumber.PhoneNumberVerificationCode;
+import com.is.auth.repository.PhoneNumberVerificationCodeRepository;
+import com.is.auth.repository.UserRepository;
 import com.is.events.model.Event;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -19,30 +20,47 @@ import java.time.format.DateTimeFormatter;
 
 @Service
 @Slf4j
-public class EmailService {
+public class PhoneService {
 
     private final JavaMailSender mailSender;
 
-    private final EmailVerificationCodeRepository verificationCodeRepository;
+    private final PhoneNumberVerificationCodeRepository phoneNumberVerificationCodeRepository;
+    private final UserRepository userRepository;
 
-    public EmailService(JavaMailSender mailSender,EmailVerificationCodeRepository verificationCodeRepository) {
+    public PhoneService(JavaMailSender mailSender, PhoneNumberVerificationCodeRepository phoneNumberVerificationCodeRepository, UserRepository userRepository) {
         this.mailSender = mailSender;
-        this.verificationCodeRepository = verificationCodeRepository;
+        this.phoneNumberVerificationCodeRepository = phoneNumberVerificationCodeRepository;
+        this.userRepository = userRepository;
     }
 
-    public ResponseEntity<?> sendVerificationEmail(String email, String lang) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
 
-            long requestCount = verificationCodeRepository.countRecentRequests(email, tenMinutesAgo);
-            boolean isEmailVerifed = verificationCodeRepository.checkIsEmailVerified(email);
+    public ResponseEntity<?> sendVerificationPhoneNumber(String phoneNumber, String lang) {
+        try {
+
+            LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+            boolean isPhoneExist = userRepository.existsByPhoneNumber(phoneNumber);
+            long requestCount = phoneNumberVerificationCodeRepository.countRecentRequests(phoneNumber, tenMinutesAgo);
+            boolean isEmailVerifed = phoneNumberVerificationCodeRepository.checkIsPhoneNumberVerified(phoneNumber);
             Map<String, String> texts = Map.ofEntries(
                     new AbstractMap.SimpleEntry<>("ru_title", "Вы превысили лимит попыток. Попробуйте снова через 10 минут."),
                     new AbstractMap.SimpleEntry<>("en_title", "Your limit exceeded. Try again 10 minutes later."),
                     new AbstractMap.SimpleEntry<>("uz_title", "Siz urinishlar limitidan oshdingiz. 10 daqiqadan so'ng qayta urinib ko'ring.")
             );
+
+            Map<String, String> isNotExist = Map.ofEntries(
+                    new AbstractMap.SimpleEntry<>("ru_title", "Мы не нашли этот номер в Place&Play. Пожалуйста, введите номер, который использовался при регистрации."),
+                    new AbstractMap.SimpleEntry<>("en_title", "We couldn’t find this number in Place&Play. Please enter the number you used during registration."),
+                    new AbstractMap.SimpleEntry<>("uz_title", "Ushbu raqam Place&Play tizimida topilmadi. Iltimos, roʻyxatdan oʻtishda ishlatgan raqamingizni kiriting.")
+            );
+
+
+            String isNotExistPrefix = isNotExist.containsKey(lang + "_title") ? lang : "ru";
+
+
+            if(!isPhoneExist){
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(isNotExist.get(isNotExistPrefix + "_title"));
+            }
 
             Map<String, String> textEmailIsVerified = Map.ofEntries(
                     new AbstractMap.SimpleEntry<>("ru_title", "Ваш email уже подтвержден, повторное подтверждение не требуется."),
@@ -70,22 +88,12 @@ public class EmailService {
                         .body(textEmailIsVerified.get(EmailsIsVerifiedPrefix + "_title"));
             }
             int code = generateCode();
-            EmailVerificationCode verificationCode = new EmailVerificationCode(email, code, 10); // действует 10 минут
-            verificationCodeRepository.save(verificationCode);
-            helper.setFrom("verify@placeandplay.uz");
-            helper.setTo(email);
-            helper.setSubject(textSubject.get(subjectPrefix + "_title"));
-            helper.setText(getContent(code,lang), true);
-            mailSender.send(message);
-            return ResponseEntity.ok().build();
-
-
-        } catch (MessagingException e) {
-            log.error("Ошибка при отправке письма на email: {}", email, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Ошибка при отправке письма.");
+            PhoneNumberVerificationCode verificationCode = new PhoneNumberVerificationCode(phoneNumber, code, 10); // действует 10 минут
+            phoneNumberVerificationCodeRepository.save(verificationCode);
+            return ResponseEntity.status(HttpStatus.OK)
+                    .body(verificationCode);
         } catch (Exception e) {
-            log.error("Неизвестная ошибка при отправке email: {}", email, e);
+            log.error("Неизвестная ошибка при отправке email: {}", phoneNumber, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Произошла непредвиденная ошибка.");
         }
@@ -213,20 +221,29 @@ public class EmailService {
 
 
 
-    public ResponseEntity<?> verifyCode(String email, int code,String lang) {
-        Optional<EmailVerificationCode> optionalCode = verificationCodeRepository.findByEmailAndCodeAndIsVerifiedFalse(email, code);
+    public ResponseEntity<?> verifyCode(String phoneNumber, int code,String lang) {
+        Optional<PhoneNumberVerificationCode> optionalCode = phoneNumberVerificationCodeRepository.findByPhoneNumberAndCodeAndIsVerifiedFalse(phoneNumber, code);
 
         if (optionalCode.isPresent()) {
-            EmailVerificationCode verificationCode = optionalCode.get();
+            PhoneNumberVerificationCode verificationCode = optionalCode.get();
 
             if (verificationCode.getExpiresAt().isAfter(LocalDateTime.now())) {
                 verificationCode.setVerified(true);
-                verificationCodeRepository.save(verificationCode);
-                verificationCodeRepository.updateUserIsEmailVerified(email); // если юзер подтвердил свой Email
+                phoneNumberVerificationCodeRepository.save(verificationCode);
+                phoneNumberVerificationCodeRepository.updateUserIsPhoneVerified(phoneNumber); // если юзер подтвердил свой номер телефона
                 return ResponseEntity.ok().build();
             }
         }
-        return ResponseEntity.status(401).build();
+
+        Map<String, String> conflict = Map.ofEntries(
+                new AbstractMap.SimpleEntry<>("ru_title", "Текущий код не является действительным, попробуйте еще раз!"),
+                new AbstractMap.SimpleEntry<>("en_title", "The current code is not valid, please try again!"),
+                new AbstractMap.SimpleEntry<>("uz_title", "Kiritilgan kod yaroqsiz. Iltimos, qayta urinib ko'ring!")
+        );
+
+        String conflictPrefix = conflict.containsKey(lang + "_title") ? lang : "ru";
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(conflict.get(conflictPrefix + "_title"));
     }
 
         public int generateCode(){

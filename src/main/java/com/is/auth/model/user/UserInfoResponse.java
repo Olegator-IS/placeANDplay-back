@@ -36,8 +36,8 @@ public class UserInfoResponse {
     @JsonProperty("role")
     private String role;
 
-    @JsonProperty("is_email_verified")
-    private Boolean isEmailVerified;
+    @JsonProperty("is_phone_verified")
+    private Boolean isPhoneVerified;
 
     @JsonProperty("profile_picture_url")
     private String profilePictureUrl;

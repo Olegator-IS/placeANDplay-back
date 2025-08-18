@@ -1,6 +1,6 @@
 package com.is.events.service;
 
-import com.is.auth.service.EmailService;
+import com.is.auth.service.PhoneService;
 import com.is.auth.service.PushNotificationService;
 import com.is.events.dto.EventDTO;
 import com.is.events.dto.OrganizerDTO;
@@ -38,7 +38,6 @@ import com.is.events.dto.EventAvailabilityDTO;
 import com.is.events.dto.EventCreationAvailabilityResponse;
 import com.is.events.dto.EventStatusUpdateRequest;
 
-import com.is.events.service.EventMessageService;
 import com.is.events.dto.UserEventStatisticsDTO;
 import com.is.events.dto.EventJoinAvailabilityResponse;
 import com.is.events.model.EventParticipant;
@@ -59,7 +58,7 @@ public class EventsService {
     private final WebSocketService webSocketService;
     private final UserRepository userRepository;
     private final EventMessageService eventMessageService;
-    private final EmailService emailService;
+    private final PhoneService emailService;
     private final PlaceRepository placeRepository;
     private final PushNotificationService pushNotificationService;
     private final UserAdditionalInfoRepository userAdditionalInfoRepository;

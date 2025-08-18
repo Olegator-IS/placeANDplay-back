@@ -11,13 +11,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @ApiOperation(value = "Авторизация пользователя", notes = "Передаётся JSON модель email и password в открытом виде")
 public class LoginRequest {
-    @ApiModelProperty(value = "email", example = "abramov.o.o.1998@gmail.com")
-    private String email;
+    @ApiModelProperty(value = "phoneNumber", example = "+998998888931")
+    private String phoneNumber;
     @ApiModelProperty(value = "password", example = "Test123")
     private String password;
 
-    public LoginRequest(String email, String password){
-        this.email = email;
+    public LoginRequest(String phoneNumber, String password){
+        this.phoneNumber = phoneNumber;
         this.password = password;
     }
 }
