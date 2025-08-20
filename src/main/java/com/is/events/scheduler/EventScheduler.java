@@ -75,7 +75,7 @@ public class EventScheduler {
                         webSocketService.notifyEventUpdate(event.getPlaceId());
                         webSocketService.sendEventUpdate(savedEvent);
                         Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
-                        emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
+//                        emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
                         log.info("Event {} expired due to time", event.getEventId());
                     }
                 } catch (Exception e) {

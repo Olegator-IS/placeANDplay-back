@@ -15,6 +15,7 @@ import com.is.events.model.enums.EventMessageType;
 import com.is.events.repository.EventsRepository;
 import com.is.events.repository.UserActivityTrackingRepository;
 import com.is.auth.repository.UserRepository;
+import com.is.org.service.TelegramNotificationService;
 import com.is.places.model.Place;
 import com.is.places.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +62,7 @@ public class EventsService {
     private final PhoneService emailService;
     private final PlaceRepository placeRepository;
     private final PushNotificationService pushNotificationService;
+    private final TelegramNotificationService telegramNotificationService;
     private final UserAdditionalInfoRepository userAdditionalInfoRepository;
 
 //    @Autowired
@@ -221,7 +223,7 @@ public class EventsService {
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
         Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
 
-        emailService.sendEventCreated(event,lang,getPlace.getAddress(),getPlace.getName());
+//        emailService.sendEventCreated(event,lang,getPlace.getAddress(),getPlace.getName());
 
         // Отправляем уведомления пользователям, у которых этот вид спорта в избранном
         pushNotificationService.sendNewEventNotification(savedEvent);
@@ -325,7 +327,8 @@ public class EventsService {
         webSocketService.sendEventUpdate(convertToDTO(savedEvent));
         Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
 
-        emailService.sendEventStatusChangeNotification(event,lang,getPlace.getName(),getPlace.getPhone());
+        telegramNotificationService.sendNotificationToOrganization(event.getPlaceId(), "NEW EVENT CHECK");
+//        emailService.sendEventStatusChangeNotification(event,lang,getPlace.getName(),getPlace.getPhone());
         return savedEvent;
     }
 
@@ -908,7 +911,7 @@ public class EventsService {
                     Place getPlace = placeRepository.findPlaceByPlaceId(event.getPlaceId());
 
 
-                    emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
+//                    emailService.sendEventStatusChangeNotification(event,"ru",getPlace.getName(),getPlace.getPhone());
                     log.info("Event {} automatically started at {}. Event time was: {}", 
                         event.getEventId(), now, event.getDateTime());
                 }

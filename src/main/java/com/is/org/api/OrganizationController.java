@@ -2,7 +2,9 @@ package com.is.org.api;
 
 import com.is.org.model.OrganizationLoginRequest;
 import com.is.org.model.OrganizationRegistrationRequest;
+import com.is.org.model.OrganizationTelegramChatRequest;
 import com.is.org.service.OrganizationService;
+import com.is.org.service.OrganizationTelegramChatService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiResponse;
@@ -23,6 +25,7 @@ public class OrganizationController {
 
     private static final Logger log = LoggerFactory.getLogger(OrganizationController.class);
     private final OrganizationService organizationService;
+    private final OrganizationTelegramChatService telegramChatService;
 
     @PostMapping("/registration")
     @ApiOperation(value = "Register new organization", notes = "Register a new organization with basic information")
@@ -91,5 +94,52 @@ public class OrganizationController {
             @RequestHeader String refreshToken) {
         log.info("Received token refresh request for organization");
         return organizationService.refreshToken(refreshToken);
+    }
+
+    @PostMapping("/telegram-chat")
+    @ApiOperation(value = "Save organization telegram chat", notes = "Save or update telegram chat ID for organization")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Telegram chat saved successfully"),
+        @ApiResponse(code = 400, message = "Invalid input data"),
+        @ApiResponse(code = 409, message = "Chat ID already exists for this organization")
+    })
+    public ResponseEntity<?> saveTelegramChat(@RequestBody OrganizationTelegramChatRequest request) {
+        log.info("Received telegram chat save request for organization: {}", request.getOrgId());
+        try {
+            var result = telegramChatService.saveTelegramChat(request);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/telegram-chats/{orgId}")
+    @ApiOperation(value = "Get organization telegram chats", notes = "Get all active telegram chat IDs for organization")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Telegram chats retrieved successfully"),
+        @ApiResponse(code = 404, message = "Organization not found")
+    })
+    public ResponseEntity<?> getTelegramChats(@PathVariable Long orgId) {
+        log.info("Received request for telegram chats of organization: {}", orgId);
+        var chats = telegramChatService.findByOrgId(orgId);
+        return ResponseEntity.ok(chats);
+    }
+
+    @DeleteMapping("/telegram-chat/{orgId}/{chatId}")
+    @ApiOperation(value = "Deactivate organization telegram chat", notes = "Deactivate specific telegram chat for organization")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "Telegram chat deactivated successfully"),
+        @ApiResponse(code = 404, message = "Chat not found")
+    })
+    public ResponseEntity<?> deactivateTelegramChat(
+            @PathVariable Long orgId,
+            @PathVariable String chatId) {
+        log.info("Received request to deactivate telegram chat {} for organization: {}", chatId, orgId);
+        boolean result = telegramChatService.deactivateChatByOrgIdAndChatId(orgId, chatId);
+        if (result) {
+            return ResponseEntity.ok("Chat deactivated successfully");
+        } else {
+            return ResponseEntity.status(404).body("Chat not found");
+        }
     }
 }

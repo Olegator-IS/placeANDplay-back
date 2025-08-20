@@ -11,6 +11,7 @@ import com.is.auth.model.user.RegistrationAddInfoRequest;
 import com.is.auth.model.user.RegistrationRequest;
 import com.is.auth.model.user.UserService;
 import com.is.auth.service.PhoneService;
+import com.is.auth.service.SftpService;
 import com.is.events.service.WebSocketService;
 import io.swagger.annotations.*;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -41,13 +42,15 @@ public class RbsControllerAuth {
     private final UserService userService;
     private final PhoneService phoneService;
     private final WebSocketService webSocketService;
+    private final SftpService sftpService;
 
     @Autowired
-    public RbsControllerAuth(UserService userService, PhoneService phoneService, WebSocketService webSocketService) {
+    public RbsControllerAuth(UserService userService, PhoneService phoneService, WebSocketService webSocketService, SftpService sftpService) {
         log.info("RbsControllerAuth initialized!");
         this.userService = userService;
         this.phoneService = phoneService;
         this.webSocketService = webSocketService;
+        this.sftpService = sftpService;
     }
 
 //    public void notifyEventUpdate(Long placeId) {
@@ -371,6 +374,36 @@ public class RbsControllerAuth {
     private void validateLanguage(String language) {
         if (!language.equals("ru") && !language.equals("en") && !language.equals("uz")) {
             throw new IllegalArgumentException("Unsupported language. Supported languages are: ru, en, uz");
+        }
+    }
+
+    @GetMapping("/test-sftp")
+    @ApiOperation(value = "Test SFTP connection", notes = "Test SFTP server connection")
+    @ApiResponses(value = {
+        @ApiResponse(code = 200, message = "SFTP connection successful"),
+        @ApiResponse(code = 503, message = "SFTP connection failed")
+    })
+    public ResponseEntity<Map<String, Object>> testSftpConnection() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            boolean sftpSuccess = sftpService.testConnection();
+            if (sftpSuccess) {
+                result.put("status", "UP");
+                result.put("message", "SFTP connection successful");
+                result.put("timestamp", LocalDateTime.now());
+                return ResponseEntity.ok(result);
+            } else {
+                result.put("status", "DOWN");
+                result.put("message", "SFTP connection failed");
+                result.put("timestamp", LocalDateTime.now());
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
+            }
+        } catch (Exception e) {
+            log.error("SFTP test failed", e);
+            result.put("status", "DOWN");
+            result.put("message", "SFTP test failed: " + e.getMessage());
+            result.put("timestamp", LocalDateTime.now());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(result);
         }
     }
 }
