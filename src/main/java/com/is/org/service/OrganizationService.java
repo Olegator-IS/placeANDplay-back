@@ -187,6 +187,33 @@ public class OrganizationService {
                 TokenSecurity.encryptToken(refreshToken, secretKey)));
     }
 
+    public ResponseEntity<?> botLogin(OrganizationLoginRequest loginRequest) throws Exception {
+        log.info("Bot login attempt for email: {}", loginRequest.getEmail());
+        
+        OrganizationAccounts account = organizationAccountRepository.findByEmail(loginRequest.getEmail());
+        if (account == null || !passwordEncoder.matches(loginRequest.getPassword(), account.getPassword())) {
+            log.warn("Invalid bot login attempt for email: {}", loginRequest.getEmail());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new Response(401, "Invalid email or password", "INVALID_CREDENTIALS"));
+        }
+
+        // Проверяем, что аккаунт активен
+        if (!"CONFIRMED".equals(account.getStatus())) {
+            log.warn("Inactive account login attempt for email: {}", loginRequest.getEmail());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new Response(401, "Account is not active", "ACCOUNT_INACTIVE"));
+        }
+
+        // Генерация токенов для бота
+        String accessToken = jwtAuthenticationFilter.generateTokenForOrg(loginRequest.getEmail(),"ORGANIZATION");
+        String refreshToken = jwtAuthenticationFilter.generateRefreshTokenForOrg(loginRequest.getEmail(),"ORGANIZATION");
+
+        log.info("Bot successfully logged in with email: {}", loginRequest.getEmail());
+        return ResponseEntity.ok(new ResponseToken(200,
+                TokenSecurity.encryptToken(accessToken, secretKey),
+                TokenSecurity.encryptToken(refreshToken, secretKey)));
+    }
+
     public ResponseEntity<?> orgInfo(String accessToken, String refreshToken) throws Exception {
         String decryptedToken = TokenSecurity.decryptToken(accessToken, secretKey);
         Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);

@@ -43,8 +43,8 @@ public class FileStorageService {
             
             log.info("File uploaded successfully to SFTP: {}", remotePath);
 
-            // Возвращаем полный URL для доступа к файлу через веб
-            return domain + "/uploads/" + directory + "/" + fileName;
+            // Возвращаем полный URL для доступа к файлу через API
+            return domain + "/" + directory + "/" + fileName;
         } catch (IOException e) {
             log.error("Error uploading file: {}", e.getMessage());
             e.printStackTrace();
