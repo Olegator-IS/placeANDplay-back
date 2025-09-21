@@ -278,8 +278,11 @@ public class UserService {
             }
 
             Map<String, Object> tokenInfo = new HashMap<>();
-            tokenInfo.put("accessToken", TokenSecurity.encryptToken(jwtToken, secretKey));
-            tokenInfo.put("refreshToken", TokenSecurity.encryptToken(jwtRefreshToken, secretKey));
+//            tokenInfo.put("accessToken", TokenSecurity.encryptToken(jwtToken, secretKey));
+//            tokenInfo.put("refreshToken", TokenSecurity.encryptToken(jwtRefreshToken, secretKey));
+
+            tokenInfo.put("accessToken", jwtToken);
+            tokenInfo.put("refreshToken", jwtRefreshToken);
             response.setTokenInfo(tokenInfo);
             return ResponseEntity.ok(response);
 
@@ -307,14 +310,14 @@ public class UserService {
                         .body(new Response(400, "TOKEN_MISSING", "Access token is required"));
             }
 
-            String decryptedToken = TokenSecurity.decryptToken(accessToken, secretKey);
-            if (decryptedToken == null) {
-                log.warn("Failed to decrypt token");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new Response(401, "TOKEN_DECRYPTION_ERROR", "Failed to decrypt token"));
-            }
+//            String decryptedToken = TokenSecurity.decryptToken(accessToken, secretKey);
+//            if (decryptedToken == null) {
+//                log.warn("Failed to decrypt token");
+//                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+//                        .body(new Response(401, "TOKEN_DECRYPTION_ERROR", "Failed to decrypt token"));
+//            }
 
-            Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
+            Claims claims = jwtAuthenticationFilter.extractClaims(accessToken);
             if (claims == null) {
                 log.warn("Failed to extract claims from token");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -446,8 +449,9 @@ public class UserService {
     public ResponseEntity<Response> refreshToken(String refreshToken,String language) {
         Response response = new Response(200, "OK", "Успешно");
         try {
-            String decryptedToken = TokenSecurity.decryptToken(refreshToken, secretKey);
-            Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
+//            String decryptedToken = TokenSecurity.decryptToken(refreshToken, secretKey);
+//            Claims claims = jwtAuthenticationFilter.extractClaims(decryptedToken);
+            Claims claims = jwtAuthenticationFilter.extractClaims(refreshToken);
             User user = userRepository.getUserInfoByPhoneNumber((claims.getSubject()));
 
             Authentication authentication = customAuthenticationProvider.authenticate(
@@ -456,7 +460,8 @@ public class UserService {
             String jwtToken = jwtAuthenticationFilter.generateToken(user.getPhoneNumber(), authentication);
 
             Map<String, Object> tokenInfo = new HashMap<>();
-            tokenInfo.put("accessToken", TokenSecurity.encryptToken(jwtToken, secretKey));
+//            tokenInfo.put("accessToken", TokenSecurity.encryptToken(jwtToken, secretKey));
+            tokenInfo.put("accessToken", jwtToken);
             response.setTokenInfo(tokenInfo);
             return ResponseEntity.ok(response);
 

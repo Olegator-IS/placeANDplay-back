@@ -973,17 +973,10 @@ public class EventsService {
             List<EventStatus> statuses,
             Pageable pageable) {
         
-        log.info("Fetching organization events for placeId: {} with statuses: {}, pagination: {}", 
-            placeId, statuses, pageable);
+        log.info("Fetching organization events for placeId: {} with pagination: {}", 
+            placeId, pageable);
 
-        // Преобразуем список статусов в массив строк
-        String[] statusArray = statuses != null && !statuses.isEmpty() 
-            ? statuses.stream()
-                .map(EventStatus::name)
-                .toArray(String[]::new)
-            : null;
-
-        return eventsRepository.findOrganizationEventsByStatus(placeId, statusArray, pageable)
+        return eventsRepository.findOrganizationEventsByStatus(placeId, pageable)
                 .map(this::convertToDTO);
     }
 
