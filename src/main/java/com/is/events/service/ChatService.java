@@ -169,19 +169,31 @@ public class ChatService {
                 EventMessage savedMessage = messageRepository.save(systemMessage);
                 ChatMessageDTO messageDTO = convertToDTO(savedMessage);
                 messagingTemplate.convertAndSend("/topic/chat/" + eventId, messageDTO);
+                
+                // Отправляем уведомления для системных сообщений
+                Event event = eventsRepository.findEventByEventId(eventId);
+                if (event != null) {
+                    pushNotificationService.sendSystemChatMessageNotification(
+                        event,
+                        messageDTO.getContent()
+                    );
+                }
+                
                 return messageDTO;
             }
 
             validateUserAccess(accessToken, refreshToken, language);
 
             ResponseEntity<Response> userResponse = userService.validateTokenAndGetSubject(accessToken, refreshToken, language);
+            log.info("User response for userId {}: status={}, body={}", userId, userResponse.getStatusCode(), userResponse.getBody());
+            
             EventMessage userMessage = new EventMessage();
             userMessage.setEventId(eventId);
             userMessage.setSenderId(userId);
             userMessage.setMessage(request.getContent());
             userMessage.setContent(request.getContent());
             userMessage.setSentAt(LocalDateTime.now());
-            userMessage.setSenderName("User " + userId);
+            userMessage.setSenderName("User " + userId); // Временное значение
             userMessage.setType(MessageType.TEXT);
             userMessage.setIsEdited(false);
             userMessage.setIsDeleted(false);
@@ -190,12 +202,52 @@ public class ChatService {
             if (request.getQuotedMessageId() != null) {
                 userMessage.setParentMessageId(request.getQuotedMessageId());
             }
-            if (userResponse.getBody() != null) {
+            if (userResponse.getBody() != null && userResponse.getBody().getResult() != null) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> userInfo = (Map<String, Object>) userResponse.getBody().getResult();
-                String firstName = userInfo.get("firstName") != null ? userInfo.get("firstName").toString() : "";
-                String lastName = userInfo.get("lastName") != null ? userInfo.get("lastName").toString() : "";
-                userMessage.setSenderName(firstName + " " + lastName);
+                log.info("User info for userId {}: {}", userId, userInfo);
+                
+                String firstName = "";
+                String lastName = "";
+                
+                // Пробуем разные варианты полей
+                if (userInfo.get("firstName") != null) {
+                    firstName = userInfo.get("firstName").toString();
+                } else if (userInfo.get("first_name") != null) {
+                    firstName = userInfo.get("first_name").toString();
+                }
+                
+                if (userInfo.get("lastName") != null) {
+                    lastName = userInfo.get("lastName").toString();
+                } else if (userInfo.get("last_name") != null) {
+                    lastName = userInfo.get("last_name").toString();
+                }
+                
+                String fullName = (firstName + " " + lastName).trim();
+                log.info("Extracted name for userId {}: firstName='{}', lastName='{}', fullName='{}'", userId, firstName, lastName, fullName);
+                
+                if (!fullName.isEmpty()) {
+                    userMessage.setSenderName(fullName);
+                } else {
+                    userMessage.setSenderName("User " + userId);
+                }
+            } else {
+                // Если не удалось получить данные пользователя, попробуем через getUserProfile
+                try {
+                    ResponseEntity<Response> profileResponse = userService.getUserProfile(userId, language);
+                    if (profileResponse.getBody() != null && profileResponse.getBody().getResult() != null) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> userInfo = (Map<String, Object>) profileResponse.getBody().getResult();
+                        String firstName = userInfo.get("first_name") != null ? userInfo.get("first_name").toString() : "";
+                        String lastName = userInfo.get("last_name") != null ? userInfo.get("last_name").toString() : "";
+                        String fullName = (firstName + " " + lastName).trim();
+                        if (!fullName.isEmpty()) {
+                            userMessage.setSenderName(fullName);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to get user profile for ID {}: {}", userId, e.getMessage());
+                }
             }
             EventMessage savedMessage = messageRepository.save(userMessage);
             ChatMessageDTO messageDTO = convertToDTO(savedMessage);
@@ -307,11 +359,21 @@ public class ChatService {
     }
 
     private ChatMessageDTO convertToDTO(EventMessage message) {
+        // Убеждаемся, что senderName не пустой
+        String senderName = message.getSenderName();
+        if (senderName == null || senderName.trim().isEmpty()) {
+            if (message.getSenderId() != null && message.getSenderId() != 0) {
+                senderName = "User " + message.getSenderId();
+            } else {
+                senderName = "System";
+            }
+        }
+        
         ChatMessageDTO dto = ChatMessageDTO.builder()
                 .messageId(message.getMessageId())
                 .eventId(message.getEventId())
                 .senderId(message.getSenderId())
-                .senderName(message.getSenderName())
+                .senderName(senderName)
                 .content(message.getContent() != null ? message.getContent() : message.getMessage())
                 .sentAt(message.getSentAt() != null ? message.getSentAt() : message.getTimestamp())
                 .type(message.getType())

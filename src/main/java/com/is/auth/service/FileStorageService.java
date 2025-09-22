@@ -18,10 +18,10 @@ public class FileStorageService {
     @Value("${app.domain:https://placeandplay.uz}")
     private String domain;
 
-    private final FtpService ftpService;
+    private final SftpService sftpService;
 
-    public FileStorageService(FtpService ftpService) {
-        this.ftpService = ftpService;
+    public FileStorageService(SftpService sftpService) {
+        this.sftpService = sftpService;
     }
 
     public String uploadFile(MultipartFile file, String directory) {
@@ -32,19 +32,19 @@ public class FileStorageService {
             // Формируем путь для сохранения на FTP
             String remotePath = uploadDir + "/" + directory + "/" + fileName;
             
-            log.info("Trying to upload file to FTP: {}", remotePath);
+            log.info("Trying to upload file to SFTP: {}", remotePath);
             
-            // Загружаем файл на FTP сервер
-            boolean success = ftpService.uploadFile(remotePath, file.getInputStream());
+            // Загружаем файл на SFTP сервер
+            boolean success = sftpService.uploadFile(remotePath, file.getInputStream());
             
             if (!success) {
-                throw new IOException("Failed to upload file to FTP server");
+                throw new IOException("Failed to upload file to SFTP server");
             }
             
-            log.info("File uploaded successfully to FTP: {}", remotePath);
+            log.info("File uploaded successfully to SFTP: {}", remotePath);
 
-            // Возвращаем полный URL для доступа к файлу через веб
-            return domain + "/uploads/" + directory + "/" + fileName;
+            // Возвращаем полный URL для доступа к файлу через API
+            return domain + "/" + directory + "/" + fileName;
         } catch (IOException e) {
             log.error("Error uploading file: {}", e.getMessage());
             e.printStackTrace();

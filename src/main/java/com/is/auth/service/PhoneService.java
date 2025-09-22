@@ -63,9 +63,9 @@ public class PhoneService {
             }
 
             Map<String, String> textEmailIsVerified = Map.ofEntries(
-                    new AbstractMap.SimpleEntry<>("ru_title", "Ваш email уже подтвержден, повторное подтверждение не требуется."),
-                    new AbstractMap.SimpleEntry<>("en_title", "Your email is already verified, no further confirmation is needed."),
-                    new AbstractMap.SimpleEntry<>("uz_title", "Sizning emailingiz allaqachon tasdiqlangan, qayta tasdiqlash talab qilinmaydi.")
+                    new AbstractMap.SimpleEntry<>("ru_title", "Ваш номер телефона уже подтвержден, повторное подтверждение не требуется."),
+                    new AbstractMap.SimpleEntry<>("en_title", "Your phone number is already verified, no further confirmation is needed."),
+                    new AbstractMap.SimpleEntry<>("uz_title", "Sizning telefon allaqachon tasdiqlangan, qayta tasdiqlash talab qilinmaydi.")
             );
 
             Map<String, String> textSubject = Map.ofEntries(
@@ -84,7 +84,7 @@ public class PhoneService {
             }
 
             if(isEmailVerifed){
-                return ResponseEntity.status(HttpStatus.OK)
+                return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(textEmailIsVerified.get(EmailsIsVerifiedPrefix + "_title"));
             }
             int code = generateCode();

@@ -220,17 +220,16 @@ public interface EventsRepository extends JpaRepository<Event, Long>, JpaSpecifi
     @Query(value = """
             SELECT e.* FROM events.events e 
             WHERE e.place_id = :placeId
-            AND (:statuses IS NULL OR e.status = ANY(:statuses))
+            AND e.status IN ('PENDING_APPROVAL', 'CONFIRMED', 'IN_PROGRESS')
             """, 
             countQuery = """
             SELECT COUNT(*) FROM events.events e 
             WHERE e.place_id = :placeId
-            AND (:statuses IS NULL OR e.status = ANY(:statuses))
+            AND e.status IN ('PENDING_APPROVAL', 'CONFIRMED','IN_PROGRESS')
             """,
             nativeQuery = true)
     Page<Event> findOrganizationEventsByStatus(
         @Param("placeId") Long placeId,
-        @Param("statuses") String[] statuses,
         Pageable pageable
     );
 

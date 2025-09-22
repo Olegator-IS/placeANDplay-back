@@ -7,6 +7,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
 import com.is.auth.model.UserFcmToken;
+import com.is.auth.model.NotificationSound;
 import com.is.auth.repository.UserFcmTokenRepository;
 import com.is.auth.repository.UserAdditionalInfoRepository;
 import com.is.auth.model.user.UserAdditionalInfo;
@@ -82,6 +83,8 @@ public class PushNotificationService {
             // Получаем токены организатора ивента
             List<UserFcmToken> organizerTokens = userFcmTokenRepository.findByUserId(event.getOrganizerEvent().getOrganizerId());
             
+            NotificationSound sound = NotificationSound.getSoundForNotificationType("PARTICIPANT_JOINED");
+            
             for (UserFcmToken token : organizerTokens) {
                 Message message = Message.builder()
                     .setToken(token.getToken())
@@ -94,6 +97,8 @@ public class PushNotificationService {
                     .putData("type", "PARTICIPANT_JOINED")
                     .putData("eventId", event.getEventId().toString())
                     .putData("participantId", participant.getUser().getUserId().toString())
+                    .putData("sound", sound.getFileName()) // Кастомный звук для присоединения участника
+                    .putData("soundType", sound.name()) // Тип звука
                     .build();
 
                 String response = firebaseMessaging.send(message);
@@ -109,6 +114,8 @@ public class PushNotificationService {
         try {
             List<UserFcmToken> organizerTokens = userFcmTokenRepository.findByUserId(event.getOrganizerEvent().getOrganizerId());
             
+            NotificationSound sound = NotificationSound.getSoundForNotificationType("PARTICIPANT_LEFT");
+            
             for (UserFcmToken token : organizerTokens) {
                 Message message = Message.builder()
                     .setToken(token.getToken())
@@ -122,6 +129,8 @@ public class PushNotificationService {
                     .putData("type", "PARTICIPANT_LEFT")
                     .putData("eventId", event.getEventId().toString())
                     .putData("participantId", participant.getUser().getUserId().toString())
+                    .putData("sound", sound.getFileName()) // Кастомный звук для выхода участника
+                    .putData("soundType", sound.name()) // Тип звука
                     .build();
 
                 String response = firebaseMessaging.send(message);
@@ -204,6 +213,28 @@ public class PushNotificationService {
                     };
                 };
 
+                // Определяем звук в зависимости от статуса
+                NotificationSound sound;
+                String notificationType;
+                switch (newStatus) {
+                    case CONFIRMED -> {
+                        sound = NotificationSound.getSoundForNotificationType("EVENT_CONFIRMED");
+                        notificationType = "EVENT_CONFIRMED";
+                    }
+                    case REJECTED -> {
+                        sound = NotificationSound.getSoundForNotificationType("EVENT_CANCELLED");
+                        notificationType = "EVENT_CANCELLED";
+                    }
+                    case IN_PROGRESS -> {
+                        sound = NotificationSound.getSoundForNotificationType("EVENT_STARTED");
+                        notificationType = "EVENT_STARTED";
+                    }
+                    default -> {
+                        sound = NotificationSound.DEFAULT;
+                        notificationType = "EVENT_STATUS_CHANGED";
+                    }
+                }
+                
                 List<UserFcmToken> tokens = userFcmTokenRepository.findByUserId(userId);
                 for (UserFcmToken token : tokens) {
                     Message message = Message.builder()
@@ -212,9 +243,11 @@ public class PushNotificationService {
                             .setTitle(title)
                             .setBody(body)
                             .build())
-                        .putData("type", "EVENT_STATUS_CHANGED")
+                        .putData("type", notificationType)
                         .putData("eventId", event.getEventId().toString())
                         .putData("newStatus", newStatus.name())
+                        .putData("sound", sound.getFileName()) // Кастомный звук для изменения статуса
+                        .putData("soundType", sound.name()) // Тип звука
                         .build();
 
                     String response = firebaseMessaging.send(message);
@@ -233,23 +266,100 @@ public class PushNotificationService {
             List<UserFcmToken> participantTokens = userFcmTokenRepository.findByEventIdAndUserIdNot(
                 event.getEventId(), senderId);
 
+            String title = String.format("💬 Новое сообщение в \"%s\"", event.getSportEvent().getSportName());
+            String body = String.format("%s: %s", senderName, messageText);
+
+            NotificationSound sound = NotificationSound.getSoundForNotificationType("NEW_CHAT_MESSAGE");
+            
             for (UserFcmToken token : participantTokens) {
                 Message message = Message.builder()
                     .setToken(token.getToken())
                     .setNotification(Notification.builder()
-                        .setTitle(String.format("Новое сообщение в \"%s\"", event.getSportEvent().getSportName()))
-                        .setBody(String.format("%s: %s", senderName, messageText))
+                        .setTitle(title)
+                        .setBody(body)
                         .build())
                     .putData("type", "NEW_CHAT_MESSAGE")
                     .putData("eventId", event.getEventId().toString())
                     .putData("senderId", senderId.toString())
+                    .putData("senderName", senderName)
+                    .putData("messageText", messageText)
+                    .putData("sportName", event.getSportEvent().getSportName())
+                    .putData("sound", sound.getFileName()) // Кастомный звук для Flutter
+                    .putData("soundType", sound.name()) // Тип звука
+                    .putData("click_action", "FLUTTER_NOTIFICATION_CLICK")
+                    .putData("deepLink", String.format("placeandplay://chat/%d", event.getEventId()))
                     .build();
 
                 String response = firebaseMessaging.send(message);
                 log.info("Successfully sent chat message notification: {}", response);
+                
+                // Создаем уведомление в базе данных
+//                notificationService.createNotification(
+//                    token.getUserId(),
+//                    "NEW_CHAT_MESSAGE",
+//                    title,
+//                    body,
+//                    Map.of(
+//                        "eventId", event.getEventId(),
+//                        "senderId", senderId,
+//                        "senderName", senderName,
+//                        "messageText", messageText,
+//                        "sportName", event.getSportEvent().getSportName()
+//                    )
+//                );
             }
         } catch (Exception e) {
             log.error("Error sending chat message notification", e);
+        }
+    }
+
+    // Уведомление о системном сообщении в чате
+    public void sendSystemChatMessageNotification(Event event, String messageText) {
+        try {
+            // Получаем токены всех участников ивента
+            List<UserFcmToken> participantTokens = userFcmTokenRepository.findByEventIdAndUserIdNot(
+                event.getEventId(), 0L); // Исключаем системного пользователя (userId = 0)
+
+            String title = String.format("🔔 Уведомление в \"%s\"", event.getSportEvent().getSportName());
+            String body = messageText;
+
+            NotificationSound sound = NotificationSound.getSoundForNotificationType("SYSTEM_CHAT_MESSAGE");
+            
+            for (UserFcmToken token : participantTokens) {
+                Message message = Message.builder()
+                    .setToken(token.getToken())
+                    .setNotification(Notification.builder()
+                        .setTitle(title)
+                        .setBody(body)
+                        .build())
+                    .putData("type", "SYSTEM_CHAT_MESSAGE")
+                    .putData("eventId", event.getEventId().toString())
+                    .putData("messageText", messageText)
+                    .putData("sportName", event.getSportEvent().getSportName())
+                    .putData("sound", sound.getFileName()) // Кастомный звук для Flutter
+                    .putData("soundType", sound.name()) // Тип звука
+                    .putData("click_action", "FLUTTER_NOTIFICATION_CLICK")
+                    .putData("deepLink", String.format("placeandplay://chat/%d", event.getEventId()))
+                    .build();
+
+                String response = firebaseMessaging.send(message);
+                log.info("Successfully sent system chat message notification: {}", response);
+                
+                // Создаем уведомление в базе данных
+                notificationService.createNotification(
+                    token.getUserId(),
+                    "SYSTEM_CHAT_MESSAGE",
+                    title,
+                    body,
+                    Map.of(
+                        "eventId", event.getEventId(),
+                        "messageText", messageText,
+                        "sportName", event.getSportEvent().getSportName()
+                    )
+                );
+            }
+        } catch (Exception e) {
+            log.error("Error sending system chat message notification", e);
         }
     }
 
@@ -270,6 +380,9 @@ public class PushNotificationService {
                 place.getName(),
                 formattedDate,
                 formattedTime);
+            
+            NotificationSound sound = NotificationSound.getSoundForNotificationType("NEW_EVENT");
+            
             for (UserFcmToken token : interestedUserTokens) {
                 Message message = Message.builder()
                     .setToken(token.getToken())
@@ -281,7 +394,16 @@ public class PushNotificationService {
                     .putData("eventId", event.getEventId().toString())
                     .putData("sportId", event.getSportEvent().getSportId().toString())
                     .putData("placeId", event.getPlaceId().toString())
-                    .putData("deepLink", String.format("placeandplay://event/%d", event.getEventId()))
+                    .putData("sound", sound.getFileName()) // Кастомный звук для новых событий
+                    .putData("soundType", sound.name()) // Тип звука
+                        .putData(
+                                "deepLink",
+                                String.format(
+                                        "placeandplay://event/%d?date=%s",
+                                        event.getEventId(),
+                                        event.getDateTime().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                                )
+                        )
                     .putData("click_action", "FLUTTER_NOTIFICATION_CLICK")
                     .build();
                 String response = firebaseMessaging.send(message);
@@ -306,6 +428,8 @@ public class PushNotificationService {
 
     public void sendSimpleNotification(Long userId, String title, String body, String type) {
         try {
+            NotificationSound sound = NotificationSound.getSoundForNotificationType(type);
+            
             List<UserFcmToken> tokens = userFcmTokenRepository.findByUserId(userId);
             for (UserFcmToken token : tokens) {
                 Message message = Message.builder()
@@ -315,6 +439,8 @@ public class PushNotificationService {
                         .setBody(body)
                         .build())
                     .putData("type", type)
+                    .putData("sound", sound.getFileName()) // Кастомный звук
+                    .putData("soundType", sound.name()) // Тип звука
                     .build();
                 String response = firebaseMessaging.send(message);
                 log.info("Successfully sent simple notification: {}", response);
