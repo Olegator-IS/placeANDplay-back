@@ -1,7 +1,4 @@
 package com.is.events.service;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.is.auth.model.ResponseAnswers.Response;
 import com.is.auth.model.user.UserService;
 import com.is.auth.service.PushNotificationService;
@@ -35,8 +32,6 @@ public class ChatService {
     private final EventMessageRepository messageRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
-    private final WebSocketService webSocketService;
-    private final ObjectMapper objectMapper;
     private final PushNotificationService pushNotificationService;
     private final EventsRepository eventsRepository;
 
@@ -316,6 +311,9 @@ public class ChatService {
             readBy.add(userId);
             message.setReadBy(readBy);
             messageRepository.save(message);
+            // Шлём обновление сообщения с актуальным readBy в топик события
+            ChatMessageDTO dto = convertToDTO(message);
+            messagingTemplate.convertAndSend("/topic/chat/" + message.getEventId(), dto);
         }
     }
 

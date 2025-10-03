@@ -28,4 +28,13 @@ public class UserProfileController {
             @RequestParam String language) {
         return userService.updateUserLanguage(userId, language);
     }
+
+
+    @GetMapping("/{userId}/welcome-info-stats")
+    public ResponseEntity<Response> getInfoStats(
+            @PathVariable Long userId,
+            @RequestParam(value = "language", defaultValue = "ru") String language){
+        return userService.getInfoStats(userId, language);
+    }
+
 } 

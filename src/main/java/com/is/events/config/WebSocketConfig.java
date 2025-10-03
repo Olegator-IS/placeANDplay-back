@@ -2,6 +2,7 @@ package com.is.events.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.is.auth.config.JwtAuthenticationFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,15 +13,12 @@ import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.socket.WebSocketHandler;
-import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.context.annotation.Bean;
@@ -28,15 +26,13 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptorAdapter;
 import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
-import java.util.Arrays;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -64,6 +60,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Value("${app.websocket.time-to-first-message:30000}")
     private int timeToFirstMessage;
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public WebSocketConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     public TaskScheduler taskScheduler() {
@@ -140,39 +142,43 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(new ChannelInterceptorAdapter() {
+        registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
                 
                 if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                     logger.debug("Processing STOMP CONNECT command");
-                    String token = accessor.getFirstNativeHeader("Authorization");
-                    if (token != null && token.startsWith("Bearer ")) {
-                        token = token.substring(7);
+                    String authHeader = accessor.getFirstNativeHeader("Authorization");
+                    String bearer = authHeader != null ? authHeader : (String) (accessor.getSessionAttributes() != null ? accessor.getSessionAttributes().get("Authorization") : null);
+                    String token = bearer;
+                    if (bearer != null && bearer.startsWith("Bearer ")) {
+                        token = bearer.substring(7);
+                    }
+
+                    if (token != null && !token.isEmpty()) {
                         try {
-                            // Here you would validate the token and set the authentication
-                            // Authentication auth = tokenService.validateToken(token);
-                            // SecurityContextHolder.getContext().setAuthentication(auth);
-                            // accessor.setUser(auth);
-                            logger.debug("Token validation successful");
+                            var claims = jwtAuthenticationFilter.extractClaims(token);
+                            String subject = claims.getSubject();
+                            if (subject != null && !subject.isEmpty()) {
+                                Principal principal = () -> subject;
+                                accessor.setUser(principal);
+                                logger.debug("STOMP user principal set for subject: {}", subject);
+                            } else {
+                                logger.warn("JWT has empty subject; rejecting CONNECT");
+                                throw new MessageDeliveryException("Invalid token subject");
+                            }
                         } catch (Exception e) {
                             logger.error("Token validation failed: {}", e.getMessage());
                             throw new MessageDeliveryException("Invalid token");
                         }
                     } else {
-                        logger.warn("No valid token found in STOMP CONNECT command");
+                        logger.warn("No Authorization token provided for STOMP CONNECT");
                     }
                 }
                 return message;
             }
 
-            @Override
-            public void afterSendCompletion(Message<?> message, MessageChannel channel, boolean sent, Exception ex) {
-                if (ex != null) {
-                    logger.error("Error sending message: {}", ex.getMessage());
-                }
-            }
         });
     }
 

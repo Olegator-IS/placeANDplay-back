@@ -22,6 +22,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 @RestController
@@ -36,12 +37,33 @@ public class ChatController {
     @SendTo("/topic/chat/{eventId}")
     public ChatMessageDTO sendMessage(@Payload ChatMessageRequest request,
                                     @DestinationVariable Long eventId,
-                                    @Header("userId") Long userId,
-                                    @Header("accessToken") String accessToken,
-                                    @Header("refreshToken") String refreshToken,
-                                    @Header("language") String lang) {
+                                    Principal principal,
+                                    @Header(name = "language", required = false) String lang) {
         log.info("Received chat message for event {}: {}", eventId, request);
-        return chatService.sendMessage(eventId, userId, request, accessToken, refreshToken, lang);
+        Long userId = null;
+        try {
+            if (principal != null && principal.getName() != null) {
+                String subject = principal.getName();
+                // Если subject — это числовой userId
+                userId = Long.parseLong(subject);
+            }
+        } catch (NumberFormatException e) {
+            // subject может быть email/phone — в таком случае ChatService уже умеет доставать по токену ранее;
+            // временно трактуем как системное сообщение, если не получилось распарсить userId
+            userId = 0L;
+        }
+        if (userId == null) {
+            userId = 0L;
+        }
+        return chatService.sendMessage(eventId, userId, request, "", "", lang);
+    }
+
+    @MessageMapping("/chat.typing/{eventId}")
+    @SendTo("/topic/chat/{eventId}/typing")
+    public String typing(@DestinationVariable Long eventId, Principal principal) {
+        String user = principal != null ? principal.getName() : "unknown";
+        // Сообщение о том, что пользователь набирает текст; на клиенте можно дебаунсить отображение
+        return user;
     }
 
     @GetMapping("/{eventId}/messages")
@@ -145,11 +167,11 @@ public class ChatController {
     @SubscribeMapping("/chat/{eventId}")
     public List<ChatMessageDTO> subscribeToChat(
             @DestinationVariable Long eventId,
-            @Header("accessToken") String accessToken,
-            @Header("refreshToken") String refreshToken,
-            @Header("language") String lang) {
+            Principal principal,
+            @Header(name = "language", required = false) String lang) {
         log.info("New subscription to chat for event {}", eventId);
-        return chatService.getLatestEventMessages(eventId, 50, accessToken, refreshToken, lang);
+        // При подписке теперь не требуются токены в заголовках — они проверены на уровне WS
+        return chatService.getLatestEventMessages(eventId, 50, "", "", lang);
     }
 
     @GetMapping("/debug/raw-messages")

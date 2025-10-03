@@ -74,6 +74,9 @@ public class UserService {
     private EventsService eventsService;
 
     @Autowired
+    private com.is.friendship.service.FriendshipService friendshipService;
+
+    @Autowired
     private Logger logger;
 
     @Value("${app.upload.dir:${user.home}/uploads}")
@@ -126,6 +129,51 @@ public class UserService {
                 .phoneVerified(false)
                 .registrationDate(LocalDateTime.now())
                 .build();
+    }
+
+    public ResponseEntity<Response> getInfoStats(Long userId, String language) {
+        try {
+            // Events stats
+            UserEventStatisticsDTO stats = eventsService.getUserEventStatistics(userId);
+
+            // Friends count (accepted friendships)
+            long friendsCount = 0L;
+            try {
+                com.is.friendship.dto.FriendshipListResponse friends = friendshipService.getFriends(userId, org.springframework.data.domain.PageRequest.of(0, 1));
+                friendsCount = friends.getTotalCount();
+            } catch (Exception ignored) {
+            }
+
+            // Rating
+            Double rating = null;
+            Integer reviewsCount = null;
+            UserReputation reputation = userReputationRepository.findByUserId(userId);
+            if (reputation != null) {
+                if (reputation.getRating() != null) rating = reputation.getRating().doubleValue();
+                reviewsCount = reputation.getReviewsCount();
+            }
+
+            Map<String, Object> result = new HashMap<>();
+            Map<String, Object> events = new HashMap<>();
+            int played = stats != null ? stats.getEventsAsParticipant() : 0;
+            int organized = stats != null ? stats.getEventsAsOrganizer() : 0;
+            events.put("played", played);
+            events.put("organized", organized);
+            events.put("total", played + organized);
+            result.put("events", events);
+            result.put("friends", friendsCount);
+
+            Map<String, Object> reputationInfo = new HashMap<>();
+            reputationInfo.put("rating", rating != null ? rating : 0.0);
+            reputationInfo.put("reviewsCount", reviewsCount != null ? reviewsCount : 0);
+            result.put("reputation", reputationInfo);
+
+            return ResponseEntity.ok(new Response(200, "OK", result));
+        } catch (Exception e) {
+            log.error("Error building info stats for user {}: {}", userId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new Response(500, "INTERNAL_SERVER_ERROR", "Failed to get info stats"));
+        }
     }
 
     private Map<String, String> generateTokens(String email, Authentication authentication) throws Exception {
@@ -840,6 +888,33 @@ public class UserService {
     public void clearUserProfilePictureCache(Long userId) {
         // Method to clear specific user's cache
     }
+
+
+//    public ResponseEntity<Response> getUserProfile(Long userId, String language) {
+//        try {
+//            Optional<User> userOptional = userRepository.findById(userId);
+//            if (userOptional.isEmpty()) {
+//                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+//                        .body(new Response(404, "USER_NOT_FOUND", "User not found"));
+//            }
+//
+//            User user = userOptional.get();
+//            Optional<UserAdditionalInfo> userAddInfo = userAdditionalInfoRepository.findById(userId);
+//
+//            Map<String, Object> userProfile = getStringObjectMap(user, userAddInfo);
+//
+//            // Remove sensitive information
+//            userProfile.remove("email");
+//            userProfile.remove("isEmailVerified");
+//            userProfile.remove("role");
+//
+//            return ResponseEntity.ok(new Response(200, "OK", userProfile));
+//        } catch (Exception e) {
+//            log.error("Error getting user profile for userId: {}", userId, e);
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                    .body(new Response(500, "INTERNAL_SERVER_ERROR", "Error retrieving user profile"));
+//        }
+//    }
 }
 
 
